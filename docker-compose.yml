@@ -1,0 +1,17 @@
+services:
+  pentest:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: recon-argento-stepai:latest
+    container_name: recon-pentest
+    network_mode: "host"        # crítico para SYN scans de Nmap (red del host)
+    cap_add:                    # raw sockets para nmap -sS / scans de bajo nivel
+      - NET_RAW
+      - NET_ADMIN
+    volumes:
+      - ./:/workspace           # workspace compartido (config, specs, evidence, reports)
+    working_dir: /workspace
+    stdin_open: true            # permite `docker compose run --rm pentest bash` interactivo
+    tty: true
+    command: ["bash"]

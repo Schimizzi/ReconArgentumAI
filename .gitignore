@@ -1,0 +1,91 @@
+# =============================================================================
+# ReconArgentumAI — .gitignore
+# Proyecto de AI-driven pentesting. Todo lo que contenga datos del engagement,
+# evidencia, hallazgos, credenciales o IPs reales NO debe subirse al repo.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# 1) DATOS SENSIBLES DEL ENGAGEMENT (NUNCA subir)
+# ---------------------------------------------------------------------------
+
+# Evidencia cruda de recon: IPs reales, servicios, vulnerabilidades (R4).
+/evidence/
+
+# Informes finales e individuales: hallazgos, IPs, CVEs, matriz de riesgo.
+/reports/
+
+# Planes de explotación: vectores, pasos, PoC, referencias — MUY sensibles.
+/plans/
+
+# Investigación de CVEs por target (cve_research/<target_id>_cves.json).
+/cve_research/
+
+# Bitácoras de ejecución del Orchestrator (IPs + cronología del engagement).
+/logs/
+
+# Configuración del engagement: scope.json (IPs autorizadas), approved_commands.md
+# (comandos aprobados) y stealth.yaml (parámetros de bajo ruido).
+# Para versionar plantillas, copiar a config/*.template (ej. scope.json.template).
+/config/
+
+# ---------------------------------------------------------------------------
+# 2) CONFIGURACIÓN LOCAL DEL AGENTE / IA
+# ---------------------------------------------------------------------------
+
+# Master prompt del Orchestrator y skills (metodología operativa interna).
+/.cline/
+
+# Workflows locales del agente (config de la sesión Cline/Roo, no código fuente).
+/.clinerules/
+
+# ---------------------------------------------------------------------------
+# 3) TERCEROS CLONADOS / WORDLISTS DESCARGADAS (se regeneran al instalar)
+# ---------------------------------------------------------------------------
+
+# WhatWeb se instala por git clone en tools/WhatWeb (no es parte de nuestro código).
+/tools/WhatWeb/
+
+# Wordlist de SecLists descargada por scripts/host/step7_gobuster.sh en el primer uso.
+/tools/seclists_common.txt
+
+# ---------------------------------------------------------------------------
+# 4) SCRIPTS TEMPORALES / DIAGNÓSTICO (no parte del pipeline)
+# ---------------------------------------------------------------------------
+
+# Debug/mini-scans/tests (_debug_argv, _mini_scan, _test_connect, _test_flow).
+/scripts/_*.sh
+/scripts/_*.py
+
+
+# ---------------------------------------------------------------------------
+# 5) CACHÉS / ENTORNOS VIRTUALES / SISTEMA
+# ---------------------------------------------------------------------------
+
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+node_modules/
+.DS_Store
+*.log
+*.tmp
+*.swp
+*.bak
+
+# ---------------------------------------------------------------------------
+# 6) CREDENCIALES / LLAVES / CERTIFICADOS (protección extra)
+# ---------------------------------------------------------------------------
+
+.env
+*.env
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_rsa.pub
+*.pcap
