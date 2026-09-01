@@ -58,6 +58,9 @@ def parse(path_xml: str, path_json: str) -> None:
                 "product": svc.get("product") if svc is not None and svc.get("product") else "",
                 "version": svc.get("version") if svc is not None and svc.get("version") else "",
                 "extrainfo": svc.get("extrainfo") if svc is not None and svc.get("extrainfo") else "",
+                # OPTIMIZACIÓN MULTIPROTOCOLO 2026-08-31: preservar el atributo tunnel del XML
+                # de Nmap ("ssl" cuando el servicio negocia TLS, ej. https, imaps, 993, 990, etc.)
+                "tunnel": svc.get("tunnel") if svc is not None and svc.get("tunnel") else "",
             }
             rec["tcp"][pid] = entry
 

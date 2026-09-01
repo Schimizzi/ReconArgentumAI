@@ -34,11 +34,11 @@
 | 1 | Nmap (port scan) | target (scope.json) | `nmap_ports.xml`, `nmap_ports.json`, `nmap_ports.txt` | extraer abiertos → `open_ports.txt` |
 | 2 | HTTPX (probe web) | `open_ports.txt` | `httpx.json` (JSONL completo) | extraer URLs http/https → `web_endpoints.txt` |
 | 3 | Nmap (-sC -sV) | `open_ports.txt` (solo abiertos) | `nmap_detailed.json`, `nmap_detailed.xml`, `nmap_detailed.txt` | — |
-| 4 | Nuclei | `web_endpoints.txt` | `nuclei.json` (JSONL) | — |
-| 5 | Nikto | `web_endpoints.txt` (secuencial por endpoint) | `nikto_<port>.json` (o `.html`+`.txt`) | — |
-| 6 | WhatWeb | `web_endpoints.txt` | `whatweb.json` (o `.txt`) | — |
-| 7 | Gobuster/Dirsearch | `web_endpoints.txt` + wordlist Fase 0 | `gobuster_<port>.txt` | — |
-| 8 | SSLyze | solo puertos `https://` | `sslyze_<port>.json` (o `.txt`) | — |
+| 4 | Nuclei | `open_ports.txt` — **SIEMPRE** si hay ≥1 puerto abierto | `nuclei.json` (JSONL) | — |
+| 5 | Nikto | `web_endpoints.txt` — **solo si hay web** | `nikto_<port>.json` (o `.html`+`.txt`) | — |
+| 6 | WhatWeb | `web_endpoints.txt` — **solo si hay web** | `whatweb.json` (o `.txt`) | — |
+| 7 | Gobuster/Dirsearch | **multi-modo** — `dir` (si hay web) + `dns` (si target es dominio) + `tftp` (si UDP 69 abierto) | `gobuster_<port>.txt`, `gobuster_dns.txt`, `gobuster_tftp.txt` | — |
+| 8 | SSLyze | **puertos con túnel SSL/TLS** detectados por Nmap (no solo 443/8443) | `sslyze_<port>.json` (o `.txt`) | — |
 
 Orden SIEMPRE lineal `1→2→3→…→8`, sin paralelismo (R3 del master_prompt).
 
@@ -121,10 +121,15 @@ nmap -sC -sV -p <PUERTOS_COMA_SEPARADOS> \
   <TARGET>
 ```
 
-### Step 4 — Nuclei (input: `web_endpoints.txt`) — solo si hay web
+### Step 4 — Nuclei (input: `open_ports.txt`) — SIEMPRE si hay puertos abiertos
+
+> **Optimización Multiprotocolo (2026-08-31):** Nuclei es un motor **multiprotocolo** (red, SSH,
+> DNS, TLS, web, etc.). Se ejecuta SIEMPRE que `open_ports.txt` no esté vacío, apuntando a los
+> hosts/puertos abiertos del target, para que sus plantillas de red/SSH/DNS/OT descubran
+> vulnerabilidades no-web además de las web. Ya NO depende de `web_endpoints.txt`.
 
 ```bash
-nuclei -l <WORKSPACE>/evidence/<target>/web_endpoints.txt \
+nuclei -l <WORKSPACE>/evidence/<target>/open_ports.txt \
   -o <WORKSPACE>/evidence/<target>/nuclei.json \
   -jsonl \
   -rl {{nuclei_rate_limit}} \
@@ -133,9 +138,12 @@ nuclei -l <WORKSPACE>/evidence/<target>/web_endpoints.txt \
   -s critical,high,medium
 ```
 
+- `open_ports.txt` contiene `IP:PORT` uno por línea → Nuclei aplica plantillas web a los puertos
+  HTTP(S) y plantillas de red/SSH/DNS/etc. a los demás (matching por `host:port`).
 - Templates: **set default de nuclei** (descarga automática en el 1er run) filtrado por severidad
   con `-s critical,high,medium` (aprobado en Fase 0; reemplaza `-es info` y excluye `unknown`).
 - `-bs {{nuclei_bulk_size}}` hosts en paralelo por template, resuelto de `stealth.yaml` (Fase 0: `nuclei_bulk_size: 5`; default nuclei = 25).
+- Si `open_ports.txt` está vacío (no hay puertos abiertos) → manifest `skipped_no_ports`.
 
 ### Step 5 — Nikto (input: `web_endpoints.txt` → SECUENCIAL, 1 por endpoint)
 
@@ -168,14 +176,24 @@ whatweb -i <WORKSPACE>/evidence/<target>/web_endpoints.txt \
   `--open-timeout` + `--read-timeout` (ambos resueltos de `stealth.yaml`).
 - Agresión `-a 2` aprobada en Fase 0 (conservadora). Threads `--max-threads {{whatweb_threads}}`.
 
-### Step 7 — Gobuster/Dirsearch (input: `web_endpoints.txt` → SECUENCIAL, 1 por endpoint)
+### Step 7 — Gobuster/Dirsearch (input: multi-modo, Service-Based Routing)
 
-Wordlist: path aprobado en Fase 0.
+> **Optimización Multiprotocolo (2026-08-31):** Gobuster ya no es solo `dir`. Se rutea por
+> servicio pendiente de descubrir:
+> - **`dir`**: si `web_endpoints.txt` NO está vacío → 1 por endpoint web, secuencial.
+> - **`dns`**: si el target es un **dominio** (no una IP cruda) → fuerza bruta de subdominios con
+>   `gobuster dns`. Si el target es IP, se informa `skipped_no_domain`.
+> - **`tftp`**: si el **puerto 69/UDP** está abierto (probe UDP aprobado) → enumeración TFTP con
+>   `gobuster tftp`.
 
+Wordlists (path aprobado en Fase 0): `dir`→ Web-Content `common.txt` · `dns`→ DNS
+`subdomains-top1million-5000.txt` · `tftp`→ Web-Content `common.txt`.
+
+#### Modo `dir` (Web)
 ```bash
 gobuster dir \
   -u <URL> \
-  -w <WORDLIST_FASE0> \
+  -w <WORDLIST_WEB_FASE0> \
   -o <WORKSPACE>/evidence/<target>/gobuster_<port>.txt \
   -t {{gobuster_threads}} \
   --timeout {{gobuster_timeout_seconds}}s \
@@ -183,12 +201,42 @@ gobuster dir \
   -x txt,bak,old,zip
 ```
 
-- Sin JSON nativo → `.txt` COMPLETO (registrar en el manifest).
+#### Modo `dns` (dominio)
+```bash
+gobuster dns \
+  -d <DOMINIO> \
+  -w <WORDLIST_DNS> \
+  -o <WORKSPACE>/evidence/<target>/gobuster_dns.txt \
+  -t {{gobuster_threads}} \
+  --timeout {{gobuster_timeout_seconds}}s
+```
 
-### Step 8 — SSLyze (input: solo puertos `https://` → SECUENCIAL, 1 por puerto)
+#### Modo `tftp` (puerto 69/UDP abierto)
+```bash
+gobuster tftp \
+  -s <TARGET> \
+  -w <WORDLIST_WEB_FASE0> \
+  -o <WORKSPACE>/evidence/<target>/gobuster_tftp.txt \
+  -t {{gobuster_threads}} \
+  --timeout {{gobuster_timeout_seconds}}s
+```
+
+- Sin JSON nativo (ninguno de los 3 modos) → `.txt` COMPLETO (registrar en el manifest).
+- **Probe UDP 69** (aprobado en la Optimización Multiprotocolo): se resuelve desde
+  `config/stealth.yaml` (`nmap_udp_probe_*`), nunca hardcodeado (R5). Evidencia con
+  `--open -Pn` y `-oG`.
+
+### Step 8 — SSLyze (input: puertos con túnel SSL/TLS detectados por Nmap)
+
+> **Optimización Multiprotocolo (2026-08-31):** SSLyze ya no depende de `web_endpoints.txt`.
+> Se detectan los puertos con cifrado desde la salida del Step 3 (`nmap_detailed.json`/`.xml`):
+> servicios con `tunnel="ssl"`, nombres de servicio conocidos con TLS (https, imaps, pop3s,
+> smtps, ftps, ldaps, sips, telnets …), y puertos bien conocidos TLS (443, 8443, 465, 636,
+> 990, 992, 993, 995, 3389-RDP, 5986-WinRM …) entre los puertos abiertos. Se ejecuta SECUENCIAL
+> 1 por puerto TLS.
 
 ```bash
-sslyze <TARGET>:<HTTPS_PORT> \
+sslyze <TARGET>:<TLS_PORT> \
   --json_out <WORKSPACE>/evidence/<target>/sslyze_<port>.json \
   --quiet \
   --certinfo
@@ -198,13 +246,32 @@ sslyze <TARGET>:<HTTPS_PORT> \
 - `--regular` **ya no existe en 6.x**: SSLyze corre por defecto el set estándar de scan commands + `--mozilla_config intermediate`. Cada scan command adicional que interese (p.ej. `--tlsv1 --tlsv1_1 --sslv3 --reneg --heartbleed --robot`) se aprueba en Fase 0.
 - **Timeout/stealth:** SSLyze 6.x **no expone flag de timeout en CLI**. La variable `sslyze_connect_timeout` de `config/stealth.yaml` se usa como **umbral del Orchestrator** (tiempo de espera antes de declarar fallo y decisión de conexión lenta), NUNCA se hardcodea un timeout en el comando. Si Fase 0 indica WAF/tarpits/red lenta o el scan devuelve timeouts → añadir **`--slow_connection`** (reduce concurrencia; más fiable en redes lentas) y/o `--https_tunnel` si hay proxy aprobado.
 - Fallback si `--json_out` fallara: volcar stdout completo a `sslyze_<port>.txt` (sin `--quiet`).
+- Si no hay puertos TLS detectables → manifest `skipped_no_tls`.
 
-## 4. Bifurcación no-web (OBLIGATORIA)
+## 4. Service-Based Routing (Optimización Multiprotocolo — 2026-08-31)
 
-Tras el post-proceso del Step 2:
+> Reemplaza el concepto rígido de "bifurcación no-web". El pipeline decide **por step** según
+> los servicios detectados (Service-Based Routing), NO aplana los steps 4-8 ante la ausencia
+> de web. Herramientas multiprotocolo (Nuclei, Gobuster, SSLyze) se ejecutan según el input
+> que aplique a su protocolo; solo Nikto y WhatWeb son estrictamente web.
 
-- **`web_endpoints.txt` VACÍO** (target sin servicios web) → los Steps **4, 5, 6, 7 y 8** se **OMITEN automáticamente**: cada uno se registra en el manifest con estado **`skipped_no_web`** y `output: []`. El pipeline **continúa sano**: no es un error, no se marca `failed`, no se aborta el target; los hallazgos de servicios no-web del Step 3 siguen normalmente por el flujo hacia el Agente 3.
-- **`web_endpoints.txt` con al menos una URL** → se ejecutan los Steps 4-8 normalmente sobre esos endpoints.
+Tras el post-proceso del Step 2 y el Step 3:
+
+| Step | Herramienta | Condición de ejecución | Si NO aplica → status |
+|---|---|---|---|
+| 4 | Nuclei | `open_ports.txt` no vacío (**SIEMPRE** si hay ≥1 puerto abierto) | `skipped_no_ports` |
+| 5 | Nikto | `web_endpoints.txt` no vacío | `skipped_no_web` |
+| 6 | WhatWeb | `web_endpoints.txt` no vacío (aprobado en Fase 0) | `skipped_no_web` |
+| 7 | Gobuster (dir) | `web_endpoints.txt` no vacío | `skipped_no_web` |
+| 7 | Gobuster (dns) | target es un **dominio** (no IP cruda) | `skipped_no_domain` |
+| 7 | Gobuster (tftp) | **puerto 69/UDP abierto** (probe UDP aprobado) | `skipped_no_tftp` |
+| 8 | SSLyze | ≥1 puerto con túnel SSL/TLS (del Step 3) | `skipped_no_tls` |
+
+- **El pipeline continúa sano ante cualquier `skipped_*`**: no es un error, no aborta el target;
+  los hallazgos de servicios no-web del Step 3 y del Step 4 siguen al Agente 3.
+- Ejemplo real (DREAMCO-2026, run#2 pre-optimización): targets `10.150.40.155`/`10.150.40.170`
+  tenían 6 puertos abiertos (SMB/RDP/RPC) y **Nuclei se saltaba** por no haber web → con esta
+  optimización Nuclei DEBE correr contra `open_ports.txt` y detectar las plantillas no-web.
 
 ## 5. Error handling
 
@@ -226,16 +293,16 @@ Esquema exacto (igual a design.md):
     {"step": 1, "tool": "nmap_ports", "status": "success", "output": ["nmap_ports.json", "nmap_ports.xml"]},
     {"step": 2, "tool": "httpx", "status": "success", "output": ["httpx.json"]},
     {"step": 3, "tool": "nmap_detailed", "status": "success", "output": ["nmap_detailed.json", "nmap_detailed.xml", "nmap_detailed.txt"]},
-    {"step": 4, "tool": "nuclei", "status": "skipped_no_web", "output": []},
+    {"step": 4, "tool": "nuclei", "status": "skipped_no_ports", "output": []},
     {"step": 5, "tool": "nikto", "status": "skipped_no_web", "output": []},
     {"step": 6, "tool": "whatweb", "status": "skipped_no_web", "output": []},
     {"step": 7, "tool": "gobuster", "status": "skipped_no_web", "output": []},
-    {"step": 8, "tool": "sslyze", "status": "skipped_no_web", "output": []}
+    {"step": 8, "tool": "sslyze", "status": "skipped_no_tls", "output": []}
   ],
   "out_of_scope_findings": [],
   "errors": []
 }
 ```
 
-- Estados válidos de `status`: `success` | `failed` | `skipped_no_web`. `tools_executed` contiene SIEMPRE los 8 steps (8 entradas), inclusive los saltados.
+- Estados válidos de `status`: `success` | `failed` | `skipped` (WhatWeb SALTADO) | `skipped_no_ports` (Nuclei sin puertos) | `skipped_no_web` (Nikto/WhatWeb/Gobuster-dir sin web) | `skipped_no_domain` | `skipped_no_tftp` | `skipped_no_tls`. `tools_executed` contiene SIEMPRE los 8 steps (8 entradas), inclusive los saltados.
 - Se genera al terminar el pipeline del target (o al abandonarlo por `incomplete`).

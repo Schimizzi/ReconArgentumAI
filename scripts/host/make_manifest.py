@@ -3,8 +3,9 @@
 
 Uso: make_manifest.py <TARGET> [started_at] [completed_at]
 Lee config/scope.json (target_id, excluded) y evidencia/<target>/ para listar
-los outputs reales de cada step. Estados: success/failed/skipped_no_web se
-conservan si existe un manifest previo; caso contrario se infieren.
+los outputs reales de cada step. Estados: success/failed/skipped/skipped_no_*\n se
+conservan si existe un manifest previo; caso contrario se infieren por step
+según la lógica Service-Based Routing (Optimización Multiprotocolo 2026-08-31).
 """
 import json
 import os
@@ -13,11 +14,23 @@ from datetime import datetime
 
 WS = os.environ.get("WORKSPACE", os.getcwd())
 
+# Service-Based Routing: qué status por step cuando no hay outputs.
+SKIP_BY_STEP = {
+    1: "skipped_no_ports",   # Nmap sin puertos (target incomplete)
+    2: "skipped_no_ports",   # HTTPX sin puertos base
+    3: "skipped_no_ports",   # detallado sin puertos base
+    4: "skipped_no_ports",   # Nuclei siempre, si no hay puertos
+    5: "skipped_no_web",     # Nikto solo web
+    6: "skipped",            # WhatWeb SALTADO por usuario
+    7: "skipped_no_web",     # Gobuster sin web/dominio/udp69
+    8: "skipped_no_tls",     # SSLyze sin puertos TLS
+}
 
-def infer(tool_outputs: list) -> str:
-    if not tool_outputs:
-        return "skipped_no_web"
-    return "success"
+
+def infer(step: int, tool_outputs: list) -> str:
+    if tool_outputs:
+        return "success"
+    return SKIP_BY_STEP.get(step, "skipped_no_web")
 
 
 def main() -> None:
@@ -59,20 +72,32 @@ def main() -> None:
         (4, "nuclei", files("nuclei.json")),
         (5, "nikto", files("nikto_*.json")),
         (6, "whatweb", files("whatweb.json")),
-        (7, "gobuster", files("gobuster_*.txt")),
+        (7, "gobuster", files("gobuster_*.txt", "udp_69.gnmap")),
         (8, "sslyze", files("sslyze_*.json")),
     ]
+    # WhatWeb fue SALTADO por usuario en Fase 0 (DREAMCO-2026, 2026-08-31): no se ejecuta.
+    SKIPPED_TOOLS = {6: "skipped"}
 
     tools = []
     for step, tool, outs in steps:
+        if step in SKIPPED_TOOLS:
+            tools.append({"step": step, "tool": tool, "status": SKIPPED_TOOLS[step], "output": []})
+            continue
         status = ""
         for e in prev.get("tools_executed", []):
             if e.get("step") == step:
                 status = e.get("status", "")
                 break
         if not status:
-            status = infer(outs)
+            status = infer(step, outs)
         tools.append({"step": step, "tool": tool, "status": status, "output": outs})
+
+    # errores: desde _errors.log si existe (FIX 2026-08-31: antes quedaba siempre []).
+    errs = []
+    elog = os.path.join(ev, "_errors.log")
+    if os.path.exists(elog):
+        with open(elog, "r", errors="ignore") as f:
+            errs = [l.strip() for l in f.read().splitlines() if l.strip()]
 
     manifest = {
         "target": target,
@@ -81,7 +106,7 @@ def main() -> None:
         "completed_at": completed,
         "tools_executed": tools,
         "out_of_scope_findings": [],
-        "errors": [],
+        "errors": errs,
     }
     if excluded:
         manifest["out_of_scope_findings"].append({"ip": target, "reason": "in excluded_ips"})
