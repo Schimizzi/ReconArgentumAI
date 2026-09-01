@@ -117,8 +117,8 @@ def build_target(tg):
         except Exception:
             pass
 
-    nik = os.path.join(evdir, "nikto_80.json")
-    if os.path.exists(nik):
+    import glob as _glob
+    for nik in sorted(_glob.glob(os.path.join(evdir, "nikto_*.json"))):
         try:
             nk = json.load(open(nik))[0]
             for v in nk.get("vulnerabilities", []):
@@ -133,7 +133,8 @@ def build_target(tg):
 
     for c in entry["vulnerabilities"]:
         if c["source"] == "nikto" and ("missing" in c["description"].lower() or "header" in c["description"].lower()):
-            entry["config_issues"].append(c["description"])
+            if c["description"] not in entry["config_issues"]:
+                entry["config_issues"].append(c["description"])
     if not entry["services"] and os.path.exists(evdir):
         entry["config_issues"] = entry["config_issues"] or ["target incomplete: sin puertos abiertos en top-1000"]
 
@@ -205,18 +206,27 @@ def generar_md(report):
     L.append(f"**Período:** {report['started_at']} → {report['completed_at']}  ")
     L.append("**Alcance:** " + ", ".join(f"`{t['id']}` {t['ip']}" for t in report['scope']) + "\n")
     L.append("## 1. Resumen ejecutivo\n")
-    L.append("El reconocimiento identificó infraestructura de red doméstica/LAN (192.168.8.0/24). "
-             "**TGT-006 (192.168.8.233)** es un gateway/router con **AdGuard Home** expuesto (riesgo ALTO), "
-             "OpenSSH 9.6p1 con CVE-2024-6387 si no parchado, resolver Unbound con riesgo KeyTrap, y panel de "
-             "instalación web expuesto. TGT-005 (.201) es el host local sin servicios expuestos.\n")
-    L.append("**Riesgo global:** ALTO.\n")
+    n = len(report['targets'])
+    n_svc = sum(len(t['services']) for t in report['targets'])
+    maxscore = max((t['risk_score'] for t in report['targets']), default=0.0)
+    top_cves = sorted([dict(c) for t in report['targets'] for c in t['cves']],
+                      key=lambda c: float(c.get('cvss_score') or 0), reverse=True)[:3]
+    L.append(f"Se evaluaron {n} target(s) autorizado(s) del engagement `{report['engagement_id']}`. "
+             f"Se detectaron {n_svc} servicios expuestos y se correlacionaron "
+             f"{report['summary']['total_cves']} CVEs (Top por servicio, {report['summary']['cves_with_exploit']} con exploit público). "
+             f"Riesgo global máximo: **{riesgo(maxscore)} (score {maxscore})**.\n")
+    if top_cves:
+        L.append("**CVEs de mayor severidad correlacionados:**")
+        for c in top_cves:
+            L.append(f"- {c['id']} (CVSS {c.get('cvss_score')}) — {(c.get('description') or '')[:110]} [servicio: {c.get('service')}].")
+        L.append("")
     L.append("**Recomendaciones top-3:**\n")
-    L.append("1. Endurecer AdGuard Home: rotar credenciales admin, deshabilitar wizard de instalación, limitar acceso a la LAN.")
-    L.append("2. Actualizar OpenSSH (9.8p1 o backport USN-6859-1) si la build 3ubuntu13.18 no incluye el fix de CVE-2024-6387.")
-    L.append("3. Actualizar Unbound >= 1.19.1 y AdGuard Home >= 0.107.75.\n")
+    L.append("1. Confirmar la versión/build exacta de los productos detectados (en este engagement: plataforma VMware) antes de considerar explotables los CVEs correlacionados.")
+    L.append("2. Aplicar los parches/updates de VMware (advisories VMSA por CVE) que correspondan a la versión confirmada, priorizando los CVEs con exploit público.")
+    L.append("3. Corregir el hardening expuesto (certificados auto-firmados, headers de seguridad ausentes, cookies sin HttpOnly) y re-ejecutar SSLyze con timeouts mayores para completar la evaluación TLS.\n")
     L.append("## 2. Alcance y metodología\n")
     L.append("Herramientas: `" + ", ".join(report['methodology']['tools']) + "`.  ")
-    L.append("Modo: secuencial (DAG 8 steps). Bifurcación no-web aplicada en TGT-005 (incomplete).\n")
+    L.append("Modo: secuencial (DAG 8 steps). Service-Based Routing por manifest: Nikto/WhatWeb solo con endpoints web, Gobuster multi-modo, SSLyze solo sobre puertos TLS; WhatWeb SALTADO por usuario en Fase 0.\n")
     L.append("Parámetros stealth: `" + json.dumps(report['methodology']['stealth_params']) + "`\n")
     L.append("## 3. Por target\n")
     for t in report['targets']:
@@ -251,16 +261,26 @@ def generar_md(report):
         L.append(f"| {t['id']} | {t['ip']} | {t['risk_score']} | {riesgo(t['risk_score'])} |")
     L.append("")
     L.append("## 5. Recomendaciones de remediación (por prioridad)\n")
-    L.append("1. **ALTA** — Endurecer AdGuard Home (rotar credenciales admin, desactivar wizard, restringir acceso LAN).")
-    L.append("2. **ALTA** — Actualizar OpenSSH (9.8p1 / backport USN-6859-1) si 9.6p1-3ubuntu13.18 NO incluye el fix.")
-    L.append("3. **MEDIA** — Actualizar Unbound >= 1.19.1 y AdGuard Home >= 0.107.75.")
-    L.append("4. **BAJA** — Confirmar falsos positivos de Nikto (Tomcat/Exchange) con validación manual.\n")
+    recs = []
+    for t in report['targets']:
+        cv_ids = ", ".join(c['id'] for c in t['cves'][:6])
+        if cv_ids:
+            recs.append(f"**ALTA** — {t['id']} ({t['ip']}): aplicar los parches del vendor indicados en los advisories de {cv_ids}; confirmar la versión/build exacto antes de validar explotabilidad.")
+        if t['config_issues']:
+            recs.append(f"**MEDIA** — {t['id']} ({t['ip']}): corregir configuración insegura ({'; '.join(t['config_issues'][:4])}).")
+        no_svc = not t['services']
+        if no_svc:
+            recs.append(f"**BAJA** — {t['id']} ({t['ip']}): sin servicios detectados en top-1000 (incomplete); validar si el host responde por otros medios fuera del alcance.")
+    if not recs:
+        recs.append("Sin hallazgos accionables en el reporte.")
+    for i, r in enumerate(recs[:10], 1):
+        L.append(f"{i}. {r}\n" if i == len(recs[:10]) else f"{i}. {r}")
     L.append("## 6. Anexos\n")
     L.append("**Evidencia (paths absolutos):**")
     for tid, p in report['evidence_paths'].items():
         L.append(f"- `{tid}` → `{p}`")
     L.append("**Planes:** " + ", ".join(f"`{t['exploitation_plan_ref']}`" for t in report['targets'] if t['exploitation_plan_ref']) or "—")
-    L.append("**CVE research:** `" + os.path.join(WS, "cve_research", "TGT-006_cves.json") + "`\n")
+    L.append("**CVE research:** " + ", ".join(f"`{os.path.join(WS, 'cve_research', tid + '_cves.json')}`" for tid in report['evidence_paths'].keys()) + "\n")
     L.append("---\n")
     L.append("*Datos sensibles ofuscados con `***`. La evidencia cruda no se modificó.*")
     return "\n".join(L) + "\n"
