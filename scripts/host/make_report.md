@@ -13,6 +13,15 @@ Reporter"). Lee la evidencia de todos los objetivos y arma:
 Después de escanear (Fase 1) y de investigar vulnerabilidades. Genera la primera versión del
 informe que después se consolida en la entrega final.
 
+## ▶️ Cómo se usa
+
+```bash
+python3 scripts/host/make_report.py
+```
+
+Se ejecuta una vez terminadas las fases de escaneo (Fase 1) y de análisis (Fase 2): lee la
+evidencia de todos los targets y escribe los informes en `reports/`. No acepta argumentos.
+
 ## 📥 Entrada / 📤 Salida
 
 - **Entrada:** la evidencia de `evidence/<IP>/` (MANIFEST de cada objetivo, resultados de

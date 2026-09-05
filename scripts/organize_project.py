@@ -240,7 +240,7 @@ def copiar_evidencia_cruda(ev_dir, out_dir, dry_run, no_clobber):
         stem, ext = os.path.splitext(name)
         grupos.setdefault(stem, []).append((ext.lower(), src))
     for stem in sorted(grupos):
-        _, src = min(grupos[stem], key=lambda e: _EXT_PRIORIDAD.get(e[0], 99))
+        _ext, src = min(grupos[stem], key=lambda e: _EXT_PRIORIDAD.get(e[0], 99))
         copiar(src, os.path.join(out_dir, os.path.basename(src)), dry_run, no_clobber)
 
 
@@ -277,7 +277,7 @@ def read_nmap_services(ev_dir):
         if not isinstance(data, dict) or "scan" not in data:
             continue
         rows = []
-        for host, hinfo in (data.get("scan") or {}).items():
+        for _host, hinfo in (data.get("scan") or {}).items():
             if not isinstance(hinfo, dict):
                 continue
             for proto_key in ("tcp", "udp"):
@@ -492,7 +492,7 @@ def main():
     project_name = args.project or "CLIENTE"
     project_dir = os.path.join(WS, project_name)
 
-    targets, _ = descubrir_targets(scope, args.target, args.scope)
+    targets, _ev_root = descubrir_targets(scope, args.target, args.scope)
     if not targets:
         print("❌ No hay targets para procesar.")
         sys.exit(1)
