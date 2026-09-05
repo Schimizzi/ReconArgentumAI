@@ -234,7 +234,7 @@ def parse_cves_md(path, rel):
         if (linea.startswith("**Descripcion:") or linea.startswith("**Description:")
                 or linea.startswith("**Descripción:")):
             contenido = re.sub(r"^\*\*Descrip(cion|tion|ción):\s*\*?\*?\s*", "", linea)
-            for cve_busc, lista in cve_desc.items():
+            for _cve_busc, lista in cve_desc.items():
                 if lista and lista[-1][0] == "":
                     lista[-1] = (contenido, i)
                     break
@@ -244,7 +244,7 @@ def parse_cves_md(path, rel):
         if desc_list:
             # Ultima descripcion no vacia (las lineas con *Referencias* etc.
             # pueden haber agregado entradas vacias al mismo CVE).
-            for d, _ln in reversed(desc_list):
+            for d, _lin in reversed(desc_list):
                 if d:
                     desc = _corta(d, 400)
                     break
@@ -254,7 +254,7 @@ def parse_cves_md(path, rel):
             if m2:
                 severidad = m2.group(1).strip()
         if not severidad:
-            for d, _ln in (cve_desc.get(cve) or []):
+            for d, _lin in (cve_desc.get(cve) or []):
                 s = _severidad_de_texto(d)
                 if s:
                     severidad = s
@@ -365,7 +365,7 @@ def parse_nikto(path, rel):
             })
         if cookies:
             n_c = len(cookies)
-            detalle = "; ".join(c for _, c in cookies[:8])
+            detalle = "; ".join(c for _ubic, c in cookies[:8])
             if n_c > 8:
                 detalle += f"; ... y {n_c - 8} cookies más"
             findings.append({
@@ -597,7 +597,7 @@ def parse_generico(path, rel):
             sev = obj.get("severity") or ""
             desc = obj.get("description") or obj.get("desc") or obj.get("msg") or ""
             cve = None
-            for k, v in obj.items():
+            for _k, v in obj.items():
                 if isinstance(v, str) and _CVE_RE.search(v):
                     cve = _CVE_RE.search(v).group(0)
                     break
@@ -767,7 +767,7 @@ def analizar_outputs(out_dir, rel_base="outputs"):
         path = os.path.join(out_dir, name)
         if os.path.isdir(path) or name.startswith("."):
             continue
-        parser, _ = _elegir_parser(name)
+        parser, _espec = _elegir_parser(name)
         try:
             findings.extend(parser(path, f"{rel_base}/{name}"))
         except Exception as e:
