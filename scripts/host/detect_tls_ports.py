@@ -11,7 +11,7 @@ Reglas de detección (en orden):
   1. tunnel=="ssl"     → TLS directo (https, imaps, smtps, ldaps, sips, ftps, etc.)
   2. servicio en lista TLS_NAME  → TLS directo por nombre (ssl/http, https, imaps, ...)
   3. puerto en lista TLS_PORT    → TLS directo por puerto conocido (443, 8443, 465, 636,
-                                   990, 992, 993, 995, 5061, 5986, 990, 6514, 8883? — no, 8883 MQTTS)
+                                   990, 992, 993, 995, 5061, 5986, 6514, 8883? — no, 8883 MQTTS)
   4. puerto 3389 (RDP)  → STARTTLS rdp (SSLyze --starttls rdp)
   5. servicio conocido con STARTTLS (smtp, imap, pop3, ftp, ldap) → --starttls <proto>
 
@@ -19,13 +19,12 @@ Uso: detect_tls_ports.py <EVID_DIR> [--with-starttls]
 """
 import json
 import os
-import re
 import sys
 import xml.etree.ElementTree as ET
 
 # Servicios cuyo nombre ya indica TLS directo
 TLS_NAME = {"https", "ssl/http", "imaps", "pop3s", "smtps", "ldaps", "sips",
-            "ftps", "telnets", "nntps", "mss", "smtps", "https-alt", "ssl/https",
+            "ftps", "telnets", "nntps", "mss", "https-alt", "ssl/https",
             "kpasswd5", "wss", "wss (TLS)"}
 # Puertos bien conocidos TLS directo (cuando el servicio no lo aclara)
 TLS_PORT = {443, 444, 465, 563, 585, 614, 636, 853, 989, 990, 992, 993, 994,
@@ -43,7 +42,6 @@ def load_json(path):
 
 
 def from_json(ev_dir):
-    out = []
     data = load_json(os.path.join(ev_dir, "nmap_detailed.json"))
     for host in data.get("scan", {}).values():
         for port, rec in (host.get("tcp") or {}).items():
@@ -52,9 +50,7 @@ def from_json(ev_dir):
             svc = rec.get("service") or {}
             name = (svc.get("name") or "").lower()
             tunnel = (svc.get("tunnel") or "").lower()
-            product = (svc.get("product") or "").lower()
-            port_n = int(port)
-            yield (port_n, name, tunnel, product)
+            yield (int(port), name, tunnel)
 
 
 def from_xml(ev_dir):
@@ -66,8 +62,7 @@ def from_xml(ev_dir):
             svc = p.find("service")
             name = (svc.get("name") or "").lower() if svc is not None else ""
             tunnel = (svc.get("tunnel") or "").lower() if svc is not None else ""
-            product = (svc.get("product") or "").lower() if svc is not None else ""
-            yield (int(p.get("portid")), name, tunnel, product)
+            yield (int(p.get("portid")), name, tunnel)
 
 
 def main():
@@ -82,7 +77,7 @@ def main():
         return
 
     results = []
-    for port_n, name, tunnel, product in ports_iter:
+    for port_n, name, tunnel in ports_iter:
         starttls = ""
         proto = ""
         if tunnel == "ssl":

@@ -14,7 +14,7 @@ Pensado para **red teams, auditores y equipos de seguridad ofensiva** que quiere
 
 | Característica | Detalle |
 |---|---|
-| 🧠 **Pipeline multi-agente guiado por IA** | 6 agentes especializados (Orchestrator, Recon, Exploitation Planner, CVE Researcher, Reporter, Consolidador de Hallazgos) coordinados por un master prompt. **Agnóstico del modelo**: funciona con Cline, Roo Code y cualquier LLM capaz de seguir instrucciones. |
+| 🧠 **Pipeline multi-agente guiado por IA** | 6 agentes especializados (Orchestrator, Recon, Agente 3 Exploitation Planner, Agente 4 CVE Researcher, Agente 5 Reporter, Agente 6 Consolidador de Hallazgos) coordinados por un master prompt. **Agnóstico del modelo**: funciona con Cline, Roo Code y cualquier LLM capaz de seguir instrucciones. |
 | 🧮 **Protección de Contexto** | Los agentes miden cada archivo de evidencia (`wc -l` / `wc -c`) y **filtran dinámicamente con `jq`/`grep`** todo lo que supere **200 líneas o 50 KB** antes de ingerirlo. El crudo queda inmutable en disco. |
 | 🔒 **Ofuscación automática de credenciales** | Cualquier *password, token, API key o credencial* descubierta se redacta como `***` en los reportes. La evidencia original no se toca. |
 | 🕶️ **Sigilo dinámico (stealth)** | Delay entre herramientas (30s) y entre targets (5 min), rate-limits y timeouts parametrizados desde `config/stealth.yaml`. **Nada hardcodeado**. Adaptación automática ante WAF/tarpits (sube timeouts, baja rates). |
@@ -30,8 +30,8 @@ El pipeline se ejecuta en **5 fases orchestradas por un Orchestrator lógico** (
 ```
 Fase 0  Calibración interactiva
 Fase 1  Recon secuencial (DAG 8 steps)
-Fase 2  Análisis (plan de explotación + CVE research)
-Fase 3  Reporte final (MD + JSON)
+Fase 2  Análisis (Agente 3: plan de explotación + Agente 4: CVE research)
+Fase 3  Reporte final (Agente 5: MD + JSON)
 Fase 4  Consolidación (organize_project.py + Agente 6: resúmenes doc/txt por target)
 ```
 
@@ -39,10 +39,15 @@ Fase 4  Consolidación (organize_project.py + Agente 6: resúmenes doc/txt por t
 |---|---|---|---|
 | **0** | 🎛️ **Orchestrator** | Calibra las 7 herramientas con el usuario (contexto de defensas, rango de puertos, wordlists) y registra **solo comandos aprobados**. | `config/approved_commands.md` |
 | **1** | 🔍 **Recon Agent** | Ejecuta el DAG lineal 1→8 (Nmap → HTTPX → Nmap detallado → Nuclei → Nikto → WhatWeb → Gobuster → SSLyze) con delays de stealth, bifurcación **no-web** y retry 1x. | `evidence/<target>/` + `manifest.json` |
-| **2** | 📋 **Exploitation Planner** | Correlaciona evidencia por servicio con **protección de contexto** y redacta vectores accionables (pre-condiciones, pasos, PoC, detección, rollback). **Nunca ejecuta exploits.** | `plans/<target_id>_exploitation_plan.md` |
-| **2** | 🧬 **CVE Researcher** | Consulta NVD / GitHub Advisories / Exploit-DB (timeout 30s/fuente), filtra CVSS ≥ 4.0 y rankea Top 3-5 por servicio con `rank_reason`. | `cve_research/<target_id>_cves.json` |
-| **3** | 📝 **Reporter** | Consolida todo en informe dual + reportes individuales, con **ofuscación de credenciales** y validación JSON estricta. | `reports/final_report.*` + `reports/<target_id>_report.*` |
-| **4** | 📂 **Consolidador de Hallazgos** | Independiente de `organize_project.py`: analiza SOLO `CLIENTE/<target>/outputs/` y extrae/reorganiza hallazgos de las herramientas en 2 entregables por target (`.doc` + `.txt`) con **cero invención**, deduplicación y ofuscación. Nueva evidencia copiada a `outputs/` se detecta en la siguiente corrida. | `CLIENTE/<target>/<target_id>_resumen_vulnerabilidades.doc` + `..._resumen_breve.txt` |
+| **2** | 📋 **Agente 3 — Exploitation Planner** | Correlaciona evidencia por servicio con **protección de contexto** y redacta vectores accionables (pre-condiciones, pasos, PoC, detección, rollback). **Nunca ejecuta exploits.** | `plans/<target_id>_exploitation_plan.md` |
+| **2** | 🧬 **Agente 4 — CVE Researcher** | Consulta NVD / GitHub Advisories / Exploit-DB (timeout 30s/fuente), filtra CVSS ≥ 4.0 y rankea Top 3-5 por servicio con `rank_reason`. | `cve_research/<target_id>_cves.json` |
+| **3** | 📝 **Agente 5 — Reporter** | Consolida todo en informe dual + reportes individuales, con **ofuscación de credenciales** y validación JSON estricta. | `reports/final_report.*` + `reports/<target_id>_report.*` |
+| **4** | 📂 **Agente 6 — Consolidador de Hallazgos** | Independiente de `organize_project.py`: analiza SOLO `CLIENTE/<target>/outputs/` y extrae/reorganiza hallazgos de las herramientas en 2 entregables por target (`.doc` + `.txt`) con **cero invención**, deduplicación y ofuscación. Nueva evidencia copiada a `outputs/` se detecta en la siguiente corrida. | `CLIENTE/<target>/<target_id>_resumen_vulnerabilidades.doc` + `..._resumen_breve.txt` |
+
+> 🔢 **Numeración de agentes:** los roles de análisis y reporte tienen spec operativa propia
+> en `specs/` (`agent_3_exploitation_plan.md`, `agent_4_cve_research.md`, `agent_5_reporter.md`,
+> `agent_6_consolidador_hallazgos.md`). El **Orchestrator** (Fase 0) y el **Recon Agent**
+> (Fase 1) se gobiernan por el master prompt `.cline/master_prompt.md` y no tienen número propio.
 
 ### Guardrails inquebrantables (R1-R5)
 - **R1 Scope estricto** — nunca se escanea fuera de `config/scope.json`.
@@ -133,8 +138,10 @@ de este pipeline de pentest. Iniciá la Fase 0 (calibración interactiva)
 de las 7 herramientas (Nmap, HTTPX, Nuclei, Nikto, WhatWeb, Gobuster,
 SSLyze) según el scope definido en config/scope.json. Cuando tengas los
 comandos aprobados, ejecutá la Fase 1 contra los targets del alcance y
-continuá con la Fase 2 (plan de explotación + CVE research) y la Fase 3
-(reporte final). Respetá SIEMPRE los guardrails R1-R5.
+continuá con la Fase 2 (Agente 3: plan de explotación + Agente 4: CVE
+research), la Fase 3 (Agente 5: reporte final) y la Fase 4 (consolidación
+en CLIENTE/ + Agente 6: resúmenes por target). Respetá SIEMPRE los
+guardrails R1-R5.
 ```
 
 El Orchestrator te guiará: primero **aprobás o modificás** cada comando (Fase 0), y luego el DAG corre **secuencialmente** generando toda la evidencia y los reportes.
@@ -166,10 +173,12 @@ ReconArgentumAI/
 │   ├── cves_md.py                # Convierte cve_research/*.json → *_cves.md (Markdown)
 │   ├── step*.sh                  # Steps 1-8 (Modo Docker)
 │   └── host/
+│       ├── run_fase1_run3.sh     # Runner maestro Fase 1 (scope + delays + logs)
 │       ├── run_target.sh         # Orquestador por target (DAG completo + manifest)
 │       ├── make_manifest.py      # Manifest robusto por target
-│       ├── make_report.py        # Reporte dual + individuales (Agente 5)
-│       └── step*.sh              # Steps 1-8 (Modo Host)
+│       ├── make_report.py        # ⭐ Agente 5: reporte dual + individuales
+│       ├── detect_tls_ports.py   # Detecta puertos TLS para SSLyze
+│       └── step*.sh              # Steps 1-8 (Modo Host, incl. step7_udp_probe.sh)
 ├── evidence/
 │   └── <target>/
 │       ├── manifest.json         # Estado por target + outputs + out_of_scope
@@ -198,10 +207,37 @@ ReconArgentumAI/
 
 ---
 
+## 📊 Informes del Engagement — Agente 5 (Reporter, Fase 3)
+
+> Spec operativa completa: `specs/agent_5_reporter.md`.
+
+`scripts/host/make_report.py` es el **Agente 5 (Reporter)**. Al completar las Fases 1-2, lee la
+evidencia de **todos los targets** del engagement —`evidence/<target>/manifest.json`, planes en
+`plans/` y CVE research en `cve_research/`— y genera el informe consolidado del engagement más
+un informe individual por cada target:
+
+```bash
+python3 scripts/host/make_report.py
+```
+
+| Archivo generado | Contenido |
+|---|---|
+| `reports/final_report.md` / `.json` | Informe **consolidado del engagement**: portada (engagement, fechas, scope), resumen ejecutivo, alcance y metodología (tools + stealth), una sección por target (servicios, vulnerabilidades, CVEs, plan de explotación, config insegura), matriz de riesgo global y recomendaciones ordenadas. JSON machine-readable validado. |
+| `reports/<target_id>_report.md` / `.json` | Informe **individual por target** con las mismas tablas que su sección en el unificado y paths absolutos de su evidencia. |
+
+Reglas del Agente 5:
+- **Trazabilidad por paths absolutos**: cada hallazgo referencia su fuente en `evidence/`, `plans/` y `cve_research/` (sección *Anexos* del MD y `evidence_paths{}` / `exploitation_plan_ref` del JSON).
+- **Ofuscación `***`** de passwords/tokens/API keys/credenciales en MD y JSON; la evidencia cruda en disco **no se modifica**.
+- **JSON validado**: `final_report.json` y los individuales se validan (`python3 -m json.tool` / `jq empty`) antes de considerarse generados; los contadores de `summary` deben coincidir con los `targets[]` reales.
+- **Coherencia individual ↔ unificado**: cada `<target_id>_report.json` comparte `target_id`/`ip`/`risk_score`/`cves` con su entrada homónima en `final_report.json`.
+- **Targets `incomplete` / `no_web`**: se documentan igualmente, con listas vacías y su `risk_score` correspondiente.
+- **Escala de riesgo por CVSS**: 9+ = CRÍTICO, 7+ = ALTO, 4+ = MEDIO, resto = BAJO.
+
+---
+
 ## 📦 Consolidación final del engagement
 
-Al terminar todos los escaneos (Fases 1–3 completas), dos pasos ordenan la información
-por target y generan los entregables para el cliente.
+Al terminar los escaneos y el informe del engagement (Fases 1–3 completas), dos pasos de la **Fase 4** ordenan la información por target y generan los entregables para el cliente.
 
 ### 1) Ordenar la evidencia en `CLIENTE/` — `organize_project.py`
 
@@ -240,7 +276,7 @@ ni el CVE research (`cve_research/`): copia conservando los nombres originales, 
 `manifest.json`, intermedios, logs y `*_report.json`) y **genera** `<target_id>_cves.md`
 en `outputs/` ofuscando credenciales con `***`.
 
-### 2) Generar los resúmenes por target — Agente 6 (`make_vuln_report.py`)
+### 2) Generar los resúmenes por target — Agente 6 (Consolidador de Hallazgos, Fase 4)
 
 `scripts/make_vuln_report.py` es el **Agente 6 (Consolidador de hallazgos)**, un script
 **independiente** que NO modifica `organize_project.py`. Lee **solo** el directorio
