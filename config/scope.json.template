@@ -1,0 +1,14 @@
+{
+  "engagement_id": "ACME-CORP-2026",
+  "authorized_targets": [
+    {"id": "C-192.168.1.100", "ip": "192.168.1.100"},
+    {"id": "V-192.168.1.101", "ip": "192.168.1.101"},
+    {"id": "P-192.168.1.102", "ip": "192.168.1.102"}
+  ],
+  "all_ips": [
+    {"id": "X-192.168.1.110", "ip": "192.168.1.110"},
+    {"id": "C-test", "ip": "192.168.1.111"}
+  ],
+  "excluded_ips": ["192.168.1.255"],
+  "notes": "PLANTILLA DE EJEMPLO - reemplazar con los datos reales del engagement antes de usar. No contiene datos reales de ningun cliente."
+}
