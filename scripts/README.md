@@ -42,6 +42,7 @@ Cada `.md` que acompaña a un script explica, sin código:
 | `nvd_cve_detail.py` | Trae el detalle de un CVE específico | [▶ nvd_cve_detail.md](nvd_cve_detail.md) |
 | `organize_project.py` | Ordena y consolida toda la evidencia en la carpeta del cliente | [▶ organize_project.md](organize_project.md) |
 | `make_vuln_report.py` | Genera los informes de vulnerabilidades (Agente 6) | [▶ make_vuln_report.md](make_vuln_report.md) |
+| `cleanup_engagement.sh` | Borra toda la evidencia del cliente y deja el repo listo para el próximo | [▶ cleanup_engagement.md](cleanup_engagement.md) |
 
 ### Scripts del pipeline de escaneo (`scripts/host/`)
 

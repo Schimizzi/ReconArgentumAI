@@ -52,19 +52,42 @@ url_port() {
   esac
 }
 
+run_nikto_cutoff() {
+  # Watchdog para nikto: algunos servers HTTP (ej. ESXi httpd) IGNORAN -maxtime y
+  # cuelgan >5min (RUN#6/7). Cutoff = nikto_maxtime_seconds x3 (R5, no hardcodeado).
+  local rcf="$EVID/.nikto_rc" waited=0
+  local base=$(awk '/^nikto_maxtime_seconds:/ {print $2; exit}' "$WS/config/stealth.yaml")
+  base="${base:-30}"
+  local cut=$((base * 3))
+  rm -f "$rcf"
+  ( "$@" ; echo "$?" > "$rcf" ) &
+  local pid=$!
+  while kill -0 "$pid" 2>/dev/null; do
+    sleep 5; waited=$((waited+5))
+    if [ "$waited" -ge "$cut" ]; then
+      pkill -9 -f "nikto -h" 2>/dev/null; kill -9 "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
+      echo "NIKTO_WATCHDOG_KILL timeout=${cut}s (server ignoro -maxtime)" >&2
+      rm -f "$rcf"; return 1
+    fi
+  done
+  wait "$pid" 2>/dev/null; local rc=1
+  [ -f "$rcf" ] && rc=$(cat "$rcf")
+  rm -f "$rcf"; return "$rc"
+}
+
 run_retry() {
   local name="$1"; shift
   if "$@" >>"$EVID/_step.log" 2>&1; then
     echo OK
   else
-    log "⚠️  $name falló (1er intento); retry 1x…"
+    echo "[$(date +%H:%M:%S)] [WARN] $name fallo en 1er intento; retry 1x..." >&2
     sleep 5
     if "$@" >>"$EVID/_step.log" 2>&1; then echo OK_RETRY; else echo FAIL; fi
   fi
 }
 
 # ---- Step 1: Nmap port scan --------------------------------------------------
-log "Step 1/8 — Nmap port scan --top-ports 1000 (-sT, T5/rate desde stealth.yaml) sobre $TARGET"
+log "Step 1/8 - Nmap port scan --top-ports 1000 (-sT, -Pn -n, timing/rate default de Nmap) sobre $TARGET"
 R1=$(run_retry nmap_ports bash "$WS/scripts/host/step1_nmap_ports.sh" "$TARGET")
 
 # ---- Post-proceso Step 1: open_ports.txt -------------------------------------
@@ -160,7 +183,7 @@ if web_on; then
     esac
     PORT=$(url_port "$URL")
     log "  → nikto $URL (puerto $PORT)"
-    R=$(run_retry "nikto:$URL" bash "$WS/scripts/host/step5_nikto.sh" "$TARGET" "$URL" "$PORT" </dev/null)
+    R=$(run_retry "nikto:$URL" run_nikto_cutoff bash "$WS/scripts/host/step5_nikto.sh" "$TARGET" "$URL" "$PORT" </dev/null)
     [ "$R" = FAIL ] && STATUS5=failed
   done < "$EVID/web_endpoints.txt"
   sleep "$DELAY_TOOLS"

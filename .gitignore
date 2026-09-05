@@ -30,7 +30,11 @@
 # Configuración del engagement: scope.json (IPs autorizadas), approved_commands.md
 # (comandos aprobados) y stealth.yaml (parámetros de bajo ruido).
 # Para versionar plantillas, copiar a config/*.template (ej. scope.json.template).
-/config/
+/config/*
+# EXCEPCIÓN: las plantillas *.template NO contienen datos reales del engagement
+# (solo IPs de ejemplo). Se versionan para poder restaurarlas al limpiar
+# el proyecto (scripts/cleanup_engagement.sh) o al clonar el repo.
+!/config/*.template
 
 # ---------------------------------------------------------------------------
 # 2) CONFIGURACIÓN LOCAL DEL AGENTE / IA
