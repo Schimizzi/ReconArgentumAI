@@ -49,7 +49,6 @@ Cada `.md` que acompaña a un script explica, sin código:
 |---|---|---|
 | `run_fase1_run3.sh` | Recorre todos los objetivos autorizados y los escanea uno por uno | [▶ run_fase1_run3.md](host/run_fase1_run3.md) |
 | `run_target.sh` | Director del escaneo de un solo objetivo (8 pasos) | [▶ run_target.md](host/run_target.md) |
-| `make_manifest.py` | Genera la "ficha" (manifest) que registra qué se escaneó | [▶ make_manifest.md](host/make_manifest.md) |
 | `make_report.py` | Genera el informe final + informe por objetivo (Agente 5) | [▶ make_report.md](host/make_report.md) |
 | `detect_tls_ports.py` | Detecta qué puertos usan cifrado TLS (para SSLyze) | [▶ detect_tls_ports.md](host/detect_tls_ports.md) |
 
