@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """Helpers para convertir cve_research/*.json a Markdown (cves.md)."""
-import os
 
 
 def _cve_row(c):
