@@ -175,7 +175,6 @@ ReconArgentumAI/
 │   └── host/
 │       ├── run_fase1_run3.sh     # Runner maestro Fase 1 (scope + delays + logs)
 │       ├── run_target.sh         # Orquestador por target (DAG completo + manifest)
-│       ├── make_manifest.py      # Manifest robusto por target
 │       ├── make_report.py        # ⭐ Agente 5: reporte dual + individuales
 │       ├── detect_tls_ports.py   # Detecta puertos TLS para SSLyze
 │       └── step*.sh              # Steps 1-8 (Modo Host, incl. step7_udp_probe.sh)
@@ -200,7 +199,7 @@ ReconArgentumAI/
 ├── CLIENTE/                      # ⭐ Consolidación final (gitignored, nombre fijo)
 │   └── <target_ip>/
 │       ├── data/                 # 2 Markdown: *exploitation_plan.md · *report.md
-│       └── outputs/              # *cves.md + 1 evidencia por escaneo (nmap solo .xml)
+│       └── outputs/              # 1 evidencia por escaneo (nmap solo .xml)
 ├── Dockerfile · docker-compose.yml
 └── run_docker.sh · run_host.sh   # Lanzadores de entorno
 ```
@@ -254,7 +253,7 @@ CLIENTE/
 │   ├── data/                      # 2 documentos en Markdown (para pegar en un lector de .md)
 │   │   ├── 10.10.10.152_exploitation_plan.md
 │   │   └── 10.10.10.152_report.md
-│   ├── outputs/                   # 10.10.10.152_cves.md (generado) + UNA evidencia por escaneo
+│   ├── outputs/                   # UNA evidencia por escaneo (nombres originales)
 │   ├── 10.10.10.152_resumen_vulnerabilidades.doc   # ← generado por el Agente 6
 │   └── 10.10.10.152_resumen_breve.txt              # ← generado por el Agente 6
 └── 10.156.244.50/ …               # (igual por cada target escaneado)
@@ -273,15 +272,16 @@ Opciones útiles:
 El consolidado no modifica la evidencia cruda (`evidence/`), ni los planes (`plans/`),
 ni el CVE research (`cve_research/`): copia conservando los nombres originales, con
 **una sola evidencia por escaneo** (nmap solo el `.xml`; quedan fuera `nmap_ports.*`,
-`manifest.json`, intermedios, logs y `*_report.json`) y **genera** `<target_id>_cves.md`
-en `outputs/` ofuscando credenciales con `***`.
+`manifest.json`, intermedios, logs y `*_report.json`). El JSON de `cve_research/` se
+usa **solo para contar CVEs** en el `README.md` del proyecto: **no** se renderiza
+`<target_id>_cves.md`.
 
 ### 2) Generar los resúmenes por target — Agente 6 (Consolidador de Hallazgos, Fase 4)
 
 `scripts/make_vuln_report.py` es el **Agente 6 (Consolidador de hallazgos)**, un script
 **independiente** que NO modifica `organize_project.py`. Lee **solo** el directorio
 `outputs/` de cada target ya consolidado y extrae/reorganiza los hallazgos de las
-herramientas (nuclei, nikto, sslyze, nmap, gobuster, `*_cves.md`, evidencia manual)
+herramientas (nuclei, nikto, sslyze, nmap, gobuster, evidencia manual)
 para generar **dos entregables por target**:
 
 ```bash
@@ -313,7 +313,7 @@ Reglas inquebrantables del Agente 6 (**cero invención**, ver `specs/agent_6_con
 ¿Cómo correr el flujo completo del entregable?
 
 ```bash
-# 1) Consolidar la evidencia en CLIENTE/ (organiza copias + genera README y cves.md)
+# 1) Consolidar la evidencia en CLIENTE/ (organiza copias + genera README)
 python3 scripts/organize_project.py
 
 # 2) Agente 6: generar los resúmenes .doc y .txt por target (lee outputs/ de CLIENTE/)
