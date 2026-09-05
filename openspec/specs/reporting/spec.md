@@ -47,6 +47,8 @@ El Agente 5 SHALL generar, además del informe unificado, un reporte individual 
 
 #### Scenario: Consistencia del resumen
 - **WHEN** el informe JSON se genera
+- **THEN** los contadores de `summary` coinciden con los elementos reales de `targets[]`
+
 ### Requirement: Estructura del informe JSON individual
 `<target_id>_report.json` SHALL contener: `engagement_id`, `target_id`, `ip`, timestamps de inicio/fin del target, `services[]`, `vulnerabilities[]`, `cves[]`, `config_issues[]`, `exploitation_plan_ref`, `risk_score`, `out_of_scope_findings[]` y `evidence_path` (path absoluto de la evidencia de ese target). Los mismos campos SHALL ser un subconjunto coherente de la entrada correspondiente en `targets[]` del `final_report.json`.
 
@@ -74,4 +76,3 @@ Ambos informes SHALL incluir los paths absolutos de la evidencia completa (`evid
 #### Scenario: Trazabilidad de un hallazgo
 - **WHEN** un lector del informe quiere verificar un finding
 - **THEN** puede localizar el archivo de evidencia original a partir del path incluido en el informe
-- **THEN** los contadores de `summary` coinciden con los elementos reales de `targets[]`

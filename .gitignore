@@ -23,6 +23,10 @@
 # Bitácoras de ejecución del Orchestrator (IPs + cronología del engagement).
 /logs/
 
+# Resultados consolidados por scripts/organize_project.py (mismos datos sensibles
+# del engagement, organizados por proyecto). Nombre fijo del directorio destino.
+/CLIENTE/
+
 # Configuración del engagement: scope.json (IPs autorizadas), approved_commands.md
 # (comandos aprobados) y stealth.yaml (parámetros de bajo ruido).
 # Para versionar plantillas, copiar a config/*.template (ej. scope.json.template).
