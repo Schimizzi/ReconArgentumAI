@@ -31,13 +31,19 @@ Reglas de cero invencion (ver specs/agent_6_consolidador_hallazgos.md):
 
 Uso:
   python3 scripts/make_vuln_report.py [--project NOMBRE] [--target IP]...
-                                      [--dry-run] [--no-clobber]
+                                      [--dry-run] [--no-clobber] [--reset]
 
 - Sin args: procesa TODOS los targets con carpeta en <project>/ (default CLIENTE).
 - --project: nombre del directorio consolidado (default: CLIENTE).
 - --target IP: procesa solo ese target (repetible).
 - --dry-run: imprime la estructura prevista, no crea ni sobrescribe nada.
-- --no-clobber: no sobrescribe reportes ya existentes.
+- --no-clobber: no escribe reportes ya existentes (no acumula corridas).
+- --reset: BORRA los reportes previos del target y arranca de cero (el append
+  por defecto acumula corridas; solo --reset reinicia el historial).
+
+Comportamiento de append (default): cada corrida AGREGA una marcar de corrida
+con el horario y concatena el contenido tras la anterior. NO se sobrescribe ni
+se borra el historial (ni siquiera si la corrida termina sin hallazgos).
 
 No modifica scripts/organize_project.py (agente 100% independiente).
 """
@@ -782,6 +788,16 @@ def _severidad_texto(find):
     return find.get("severidad") or "No declarada en fuente"
 
 
+# ---- bloque de corrida (división + horario) para los reportes acumulativos ----
+def _corrida_txt(fecha):
+    return "# ===== corrida %s =====\n" % fecha
+
+
+def _corrida_doc(fecha):
+    return ('<hr class="corrida">\n'
+            f'<p><b>Corrida del reporte:</b> {html.escape(fecha)}</p>\n')
+
+
 def _render_doc(target_label, fecha, findings):
     """Reporte .doc como HTML compatible con Word/LibreOffice."""
     n = len(findings)
@@ -881,8 +897,8 @@ def descubrir_targets(project_dir, only_targets):
     return todos
 
 
-def procesar_target(project_dir, ip, dry_run, no_clobber):
-    """Analiza outputs/ de un target y genera los 2 reportes."""
+def procesar_target(project_dir, ip, dry_run, no_clobber, reset=False):
+    """Analiza outputs/ de un target y genera (acumulando) los 2 reportes."""
     out_dir = os.path.join(project_dir, ip, "outputs")
     if not os.path.isdir(out_dir):
         warn(f"sin outputs/ para {ip}; se omite")
@@ -915,28 +931,33 @@ def procesar_target(project_dir, ip, dry_run, no_clobber):
     doc_path = os.path.join(project_dir, ip, f"{target_id}_resumen_vulnerabilidades.doc")
     txt_path = os.path.join(project_dir, ip, f"{target_id}_resumen_breve.txt")
 
+    # --reset: arrancar historial de cero (borra reportes previos del target)
+    if reset and not dry_run:
+        for ruta in (doc_path, txt_path):
+            if os.path.exists(ruta):
+                try:
+                    os.remove(ruta)
+                    print(f"  🧹 {os.path.relpath(ruta, WS)}: reset (historial borrado).")
+                except Exception as e:
+                    warn(f"no se pudo eliminar {os.path.relpath(ruta, WS)}: {e}")
+
     if n == 0:
         print(f"⚠️ {target_label}: No se encontraron hallazgos explícitos en ninguno de los "
               "archivos fuente. No se generaron reportes.")
-        if not dry_run:
-            for ruta in (doc_path, txt_path):
-                if os.path.exists(ruta):
-                    try:
-                        os.remove(ruta)
-                        print(f"  🧹 {os.path.relpath(ruta, WS)}: reporte obsoleto "
-                              "eliminado (sin hallazgos actuales).")
-                    except Exception as e:
-                        warn(f"no se pudo eliminar {os.path.relpath(ruta, WS)}: {e}")
+        # El historial acumulado se conserva (no se borra ni se agrega nada).
         return {"ip": ip, "target_label": target_label, "findings": []}
 
     errores = 0
-    for ruta, contenido in ((doc_path, _render_doc(target_label, fecha, findings)),
-                            (txt_path, _render_txt(findings))):
+    # Append acumulativo (default): una marca de corrida + el contenido de esta corrida
+    # se agregan tras la corrida anterior. NO sobrescribe (excepto --reset que borró antes).
+    doc_blk = _corrida_doc(fecha) + _render_doc(target_label, fecha, findings)
+    txt_blk = _corrida_txt(fecha) + _render_txt(findings)
+    for ruta, contenido in ((doc_path, doc_blk), (txt_path, txt_blk)):
         if no_clobber and os.path.exists(ruta):
             warn(f"[no-clobber] ya existe: {os.path.relpath(ruta, WS)}")
             continue
         try:
-            with open(ruta, "w", encoding="utf-8") as f:
+            with open(ruta, "a", encoding="utf-8") as f:
                 f.write(contenido)
         except Exception as e:
             warn(f"error escribiendo {os.path.relpath(ruta, WS)}: {e}")
@@ -966,7 +987,9 @@ def main():
     parser.add_argument("--dry-run", action="store_true",
                         help="Solo previsualizar la estructura; no crea nada.")
     parser.add_argument("--no-clobber", action="store_true",
-                        help="No sobrescribir reportes ya existentes.")
+                        help="No sobrescribir reportes ya existentes (no acumula).")
+    parser.add_argument("--reset", action="store_true",
+                        help="Borrar los reportes previos del target y arrancar de cero.")
     args = parser.parse_args()
 
     project_dir = os.path.join(WS, args.project)
@@ -982,7 +1005,8 @@ def main():
           + ("  (dry-run: no se crea nada)" if args.dry_run else ""))
     resultados = []
     for ip in targets:
-        resultados.append(procesar_target(project_dir, ip, args.dry_run, args.no_clobber))
+        resultados.append(procesar_target(project_dir, ip, args.dry_run, args.no_clobber,
+                                          reset=args.reset))
     return 0
 
 

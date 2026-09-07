@@ -2,9 +2,9 @@
 
 > **AI-driven Pentesting** — Pipeline automatizado, multi-agente y guiado por IA para el reconnaissance y análisis de infraestructura autorizada.
 
-[![Pipeline](https://img.shields.io/badge/Pipeline-8%20Steps%20·%207%20Tools-6f42c1)]() [![Agentes](https://img.shields.io/badge/Agentes-6-brightgreen)]() [![IA-Agnóstico](https://img.shields.io/badge/IA-Agnóstico-blue)]()
+[![Pipeline](https://img.shields.io/badge/Pipeline-10%20Steps%20·%209%20Tools-6f42c1)]() [![Agentes](https://img.shields.io/badge/Agentes-6-brightgreen)]() [![IA-Agnóstico](https://img.shields.io/badge/IA-Agnóstico-blue)]()
 
-ReconArgentumAI es una **plataforma de pentesting de infraestructura** que orquesta un pipeline de *recon* de 8 pasos sobre 7 herramientas de seguridad, dirigido por un **modelo de IA** (agnóstico del proveedor) a través de Cline / Roo Code. El sistema **no explota nada**: produce evidencia completa en disco, planes de explotación documentados y reportes profesionales, siguiendo guardrails de scope, stealth y ofuscación inquebrantables.
+ReconArgentumAI es una **plataforma de pentesting de infraestructura** que orquesta un pipeline de *recon* de 10 pasos sobre 9 herramientas de seguridad, dirigido por un **modelo de IA** (agnóstico del proveedor) a través de Cline / Roo Code. El sistema **no explota nada**: produce evidencia completa en disco, planes de explotación documentados y reportes profesionales, siguiendo guardrails de scope, stealth y ofuscación inquebrantables.
 
 Pensado para **red teams, auditores y equipos de seguridad ofensiva** que quieren *recon* reproducible, trazable y de bajo ruido, tanto contra **Internet** como contra la **LAN local** — desde una misma herramienta.
 
@@ -29,20 +29,35 @@ El pipeline se ejecuta en **5 fases orchestradas por un Orchestrator lógico** (
 
 ```
 Fase 0  Calibración interactiva
-Fase 1  Recon secuencial (DAG 8 steps)
+Fase 1  Recon secuencial (DAG 10 steps)
 Fase 2  Análisis (Agente 3: plan de explotación + Agente 4: CVE research)
 Fase 3  Reporte final (Agente 5: MD + JSON)
 Fase 4  Consolidación (organize_project.py + Agente 6: resúmenes doc/txt por target)
 ```
 
-| Fase | Agente | Rol | Salida clave |
-|---|---|---|---|
-| **0** | 🎛️ **Orchestrator** | Calibra las 7 herramientas con el usuario (contexto de defensas, rango de puertos, wordlists) y registra **solo comandos aprobados**. | `config/approved_commands.md` |
-| **1** | 🔍 **Recon Agent** | Ejecuta el DAG lineal 1→8 (Nmap → HTTPX → Nmap detallado → Nuclei → Nikto → WhatWeb → Gobuster → SSLyze) con delays de stealth, bifurcación **no-web** y retry 1x. | `evidence/<target>/` + `manifest.json` |
-| **2** | 📋 **Agente 3 — Exploitation Planner** | Correlaciona evidencia por servicio con **protección de contexto** y redacta vectores accionables (pre-condiciones, pasos, PoC, detección, rollback). **Nunca ejecuta exploits.** | `plans/<target_id>_exploitation_plan.md` |
-| **2** | 🧬 **Agente 4 — CVE Researcher** | Consulta NVD / GitHub Advisories / Exploit-DB (timeout 30s/fuente), filtra CVSS ≥ 4.0 y rankea Top 3-5 por servicio con `rank_reason`. | `cve_research/<target_id>_cves.json` |
-| **3** | 📝 **Agente 5 — Reporter** | Consolida todo en informe dual + reportes individuales, con **ofuscación de credenciales** y validación JSON estricta. | `reports/final_report.*` + `reports/<target_id>_report.*` |
-| **4** | 📂 **Agente 6 — Consolidador de Hallazgos** | Independiente de `organize_project.py`: analiza SOLO `CLIENTE/<target>/outputs/` y extrae/reorganiza hallazgos de las herramientas en 2 entregables por target (`.doc` + `.txt`) con **cero invención**, deduplicación y ofuscación. Nueva evidencia copiada a `outputs/` se detecta en la siguiente corrida. | `CLIENTE/<target>/<target_id>_resumen_vulnerabilidades.doc` + `..._resumen_breve.txt` |
+| Fase | Agente | Rol | Salida clave | Modo de ejecución |
+|---|---|---|---|---|
+| **0** | 🎛️ **Orchestrator** | Calibra las 9 herramientas con el usuario (contexto de defensas, rango de puertos, wordlists) y registra **solo comandos aprobados**. | `config/approved_commands.md` | 🤖 **LLM / Manual** |
+| **1** | 🔍 **Recon Agent** | Ejecuta el DAG lineal 1→8 (Nmap → HTTPX → Nmap detallado → Nuclei → Nikto → WhatWeb → Gobuster → SSLyze) con delays de stealth, bifurcación **no-web** y retry 1x. | `evidence/<target>/` + `manifest.json` | 🧰 **Solo manual (script)** |
+| **1** | ⚠️ **Incidentes de run** (*) | Interpretar fallos de herramientas, hosts out-of-scope, VPN/WAF/tarpits, re-scans y decisiones de retry/cutoff. Los scripts no deciden: lo hace el operador. | `logs/` + manifests actualizados | 🤖 **LLM / Manual** |
+| **2** | 📋 **Agente 3 — Exploitation Planner** | Correlaciona evidencia por servicio con **protección de contexto** y redacta vectores accionables (pre-condiciones, pasos, PoC, detección, rollback). **Nunca ejecuta exploits.** | `plans/<target_id>_exploitation_plan.md` | 🧠 **Solo LLM** |
+| **2** | 🧬 **Agente 4 — CVE Researcher** | Consulta NVD / GitHub Advisories / Exploit-DB (timeout 30s/fuente), filtra CVSS ≥ 4.0 y rankea Top 3-5 por servicio con `rank_reason`. | `cve_research/<target_id>_cves.json` | 🧠 **Solo LLM** |
+| **3** | 📝 **Agente 5 — Reporter** | Consolida todo en informe dual + reportes individuales, con **ofuscación de credenciales** y validación JSON estricta. | `reports/final_report.*` + `reports/<target_id>_report.*` | 🧰 **Solo manual (script)** |
+| **4** | 📂 **Agente 6 — Consolidador de Hallazgos** | Independiente de `organize_project.py`: analiza SOLO `CLIENTE/<target>/outputs/` y extrae/reorganiza hallazgos de las herramientas en 2 entregables por target (`.doc` + `.txt`) con **cero invención**, deduplicación y ofuscación. Nueva evidencia copiada a `outputs/` se detecta en la siguiente corrida. | `CLIENTE/<target>/<target_id>_resumen_vulnerabilidades.doc` + `..._resumen_breve.txt` | 🧰 **Solo manual (script)** |
+
+> ### 🎮 ¿Cuándo interviene el LLM? (modos de ejecución)
+>
+> - 🧠 **Solo LLM** — el paso **no tiene automatización**: requiere criterio de un agente de IA
+>   (o un analista humano siguiendo la spec). No se completa solo con scripts. Los scripts de
+>   consulta (ej. `scripts/nvd_*.py`) son **auxiliares**: el entregable final lo arma el agente.
+> - 🧰 **Solo manual (script)** — el paso está **automatizado por un script** y **no requiere LLM**:
+>   un humano lo lanza con el comando indicado. Los Agentes 5 y 6 están *materializados* en scripts
+>   (`scripts/host/make_report.py`, `scripts/make_vuln_report.py`, `scripts/organize_project.py`).
+> - 🤖 **LLM / Manual** — puede hacerlo **cualquiera de los dos**: el LLM (modo recomendado por el
+>   master prompt) o un humano técnico con criterio; la elección la toma el operador del pipeline.
+>
+> (*) No es un agente formal: es la interpretación humana/LLM de los incidentes que los scripts
+> registran pero no deciden.
 
 > 🔢 **Numeración de agentes:** los roles de análisis y reporte tienen spec operativa propia
 > en `specs/` (`agent_3_exploitation_plan.md`, `agent_4_cve_research.md`, `agent_5_reporter.md`,
@@ -63,18 +78,28 @@ La arquitectura es **híbrida**: dos modos según el objetivo, con el mismo pipe
 
 | | 🐳 **Modo Docker** | 💻 **Modo Host** |
 |---|---|---|
-| **Cuándo** | Targets en **Internet** | **LAN local** (la red del equipo macOS) |
+| **Cuándo** | Targets en **Internet** (o VM Kali con Docker) | **LAN local** (la red del equipo macOS) |
 | **Lanzador** | `./run_docker.sh` | `./run_host.sh` |
 | **Binarios** | Contenedor **Kali Linux** (imagen `recon-argento-stepai`) | Herramientas nativas del host (Homebrew / pipx / git clone) |
-| **Nmap** | `-sS` (SYN, requiere raw sockets / `NET_RAW`) | `-sT` (TCP Connect, sin permisos root) |
-| **Scripts** | `scripts/` (dentro del contenedor) | `scripts/host/` (en el host) |
-| **Wordlist** | `/opt/SecLists/...` | `tools/seclists_common.txt` (descarga automática) |
+| **Nmap** | `-sS` (SYN, requiere raw sockets / `NET_RAW`; contenedor corre como root) | `-sT` (TCP Connect, sin permisos root) — autodetectado |
+| **Scripts** | `scripts/host/` (mismo set unificado que Host/VM) | `scripts/host/` (en el host) |
+| **Wordlist** | `/opt/SecLists/...` → fallback `tools/seclists_common.txt` | `tools/seclists_common.txt` o `~/Documents/SecLists/...` |
 
 > ⚠️ **Importante:** Docker Desktop (macOS) **no ve la LAN local del host** (ni con `-sS` ni con `-sT`, por el backend de red emulado). Para escanear `192.168.x.x` usa **siempre el Modo Host**.
+>
+> 🤖 **Sin LLM (solo Agente 1):** ambos modos pueden ejecutar la **Fase 1 completa de forma automática** con el mismo runner `scripts/host/run_fase1_run3.sh` (ver abajo). El LLM solo se necesita para Fase 0 (calibración) y Fases 2-4 (análisis/reportes).
 
 ```bash
+# Modo Docker — Agente 1 (Fase 1) automático, SIN LLM
+./run_docker.sh --auto                 # todos los targets de scope.json
+./run_docker.sh --auto-target 1.2.3.4  # solo esa IP
+
 # Modo Docker (session interactiva dentro del contenedor Kali)
 docker compose run --rm pentest bash
+
+# Modo Host — Agente 1 (Fase 1) automático, SIN LLM
+bash scripts/host/run_fase1_run3.sh    # todos los targets de scope.json
+bash scripts/host/run_target.sh 1.2.3.4  # solo esa IP
 
 # Modo Host (verifica tools + conectividad e imprime instrucciones)
 ./run_host.sh 192.168.8.1
@@ -126,17 +151,27 @@ docker compose build
 docker compose run --rm pentest bash
 ```
 
-Para el **Modo Host** simplemente verificá las herramientas con `./run_host.sh <gateway>` (imprime el estado y las instrucciones).
+Para el **Modo Host** simplemente verificá las herramientas con `./run_host.sh <gateway>` (imprime el estado y las instrucciones). En ambos modos podés correr el **Agente 1 de forma 100% automática (sin LLM)** — es el mismo runner:
 
-### 3) Prompt Inicial para Cline
+```bash
+# (a) Modo Docker (targets de Internet o VM Kali con Docker)
+./run_docker.sh --auto                 # Fase 1 completa, todos los targets de scope.json
+# (b) Modo Host o VM Kali (LAN local o directo en la VM)
+bash scripts/host/preflight_run.sh     # verifica tools + wordlists (opcional pero recomendado)
+bash scripts/host/run_fase1_run3.sh    # Fase 1 completa, todos los targets de scope.json
+```
 
-Abrí Cline **en la raíz del workspace** y pegá este prompt (o el equivalente en tu idioma):
+Cada target corre el DAG de 10 steps (Nmap → HTTPX → Nmap detallado → Nuclei → Nikto → WhatWeb → Gobuster → SSLyze → IIS → SMB) con delays de stealth, retry 1x y `skipped_*` automático según el servicio detectado. La evidencia queda en `evidence/<target>/` + `manifest.json`.
+
+### 3) (Opcional) Fase 0 interactiva con Cline + Fases 2-4 (análisis/reportes)
+
+Para la **calibración interactiva (Fase 0)** y el **análisis posterior (Fases 2-4)** sí se usa un LLM. Abrí Cline **en la raíz del workspace** y pegá este prompt (o el equivalente en tu idioma):
 
 ```text
 Leé el archivo .cline/master_prompt.md y asumí el rol de Orchestrator
 de este pipeline de pentest. Iniciá la Fase 0 (calibración interactiva)
-de las 7 herramientas (Nmap, HTTPX, Nuclei, Nikto, WhatWeb, Gobuster,
-SSLyze) según el scope definido en config/scope.json. Cuando tengas los
+de las 9 herramientas (Nmap, HTTPX, Nuclei, Nikto, WhatWeb, Gobuster,
+SSLyze, IIS Shortname 8.3, SMB Enum) según el scope definido en config/scope.json. Cuando tengas los
 comandos aprobados, ejecutá la Fase 1 contra los targets del alcance y
 continuá con la Fase 2 (Agente 3: plan de explotación + Agente 4: CVE
 research), la Fase 3 (Agente 5: reporte final) y la Fase 4 (consolidación
@@ -145,6 +180,8 @@ guardrails R1-R5.
 ```
 
 El Orchestrator te guiará: primero **aprobás o modificás** cada comando (Fase 0), y luego el DAG corre **secuencialmente** generando toda la evidencia y los reportes.
+
+> 💡 Si solo te interesa la **evidencia del recon** (Fase 1) sin análisis/reportes, el paso **2)** con el runner automático es todo lo que necesitás — no hace falta ningún LLM.
 
 ---
 
@@ -159,7 +196,7 @@ ReconArgentumAI/
 │   ├── stealth.yaml              # Timeouts, rates, threads y delays (fuente única R5)
 │   └── approved_commands.md      # ÚNICA fuente de comandos que Fase 1 puede ejecutar
 ├── specs/
-│   ├── agent_recon_pipeline.md   # Spec operativa Fase 1 (DAG 8 steps, modos, bifurcación no-web)
+│   ├── agent_recon_pipeline.md   # Spec operativa Fase 1 (DAG 10 steps, modos, bifurcación no-web)
 │   ├── agent_3_exploitation_plan.md  # Spec Agente 3 (protección de contexto, plan documentado)
 │   ├── agent_4_cve_research.md   # Spec Agente 4 (ranking CVEs, fuentes, rank_reason)
 │   ├── agent_5_reporter.md       # Spec Agente 5 (informe dual + individual, ofuscación)
@@ -174,10 +211,12 @@ ReconArgentumAI/
 │   ├── step*.sh                  # Steps 1-8 (Modo Docker)
 │   └── host/
 │       ├── run_fase1_run3.sh     # Runner maestro Fase 1 (scope + delays + logs)
-│       ├── run_target.sh         # Orquestador por target (DAG completo + manifest)
+│       ├── run_target.sh         # Orquestador por target (DAG 10 steps + manifest)
 │       ├── make_report.py        # ⭐ Agente 5: reporte dual + individuales
 │       ├── detect_tls_ports.py   # Detecta puertos TLS para SSLyze
-│       └── step*.sh              # Steps 1-8 (Modo Host, incl. step7_udp_probe.sh)
+│       ├── step9_iis_shortname_scan.py # ⭐ Step 9: IIS Shortname 8.3 (ev-dir / CLIENTE)
+│       ├── step10_smbclient_enum.sh     # ⭐ Step 10: SMB enum null session (ev-dir / CLIENTE)
+│       └── step*.sh              # Steps 1-10 (Modo Host, incl. step7_udp_probe.sh)
 ├── evidence/
 │   └── <target>/
 │       ├── manifest.json         # Estado por target + outputs + out_of_scope

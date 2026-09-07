@@ -185,7 +185,7 @@ def main():
         "completed_at": completed_at,
         "scope": [{"id": t["id"], "ip": t["ip"]} for t in targets_scope],
         "methodology": {
-            "tools": ["nmap", "httpx", "nuclei", "nikto", "whatweb", "gobuster", "sslyze"],
+            "tools": ["nmap", "httpx", "nuclei", "nikto", "whatweb", "gobuster", "sslyze", "iis_shortname", "smbclient"],
             "stealth_params": leer_stealth(),
             "execution_mode": "sequential",
         },
@@ -226,7 +226,7 @@ def generar_md(report):
     L.append("3. Corregir el hardening expuesto (headers de seguridad faltantes, banner de versión visible en servicio web, autenticación WinRM sobre HTTP) y re-ejecutar SSLyze con ventana de menor actividad para completar la evaluación TLS.\n")
     L.append("## 2. Alcance y metodología\n")
     L.append("Herramientas: `" + ", ".join(report['methodology']['tools']) + "`.  ")
-    L.append("Modo: secuencial (DAG 8 steps). Service-Based Routing por manifest: Nikto/WhatWeb solo con endpoints web, Gobuster multi-modo, SSLyze solo sobre puertos TLS; WhatWeb SALTADO por usuario en Fase 0.\n")
+    L.append("Modo: secuencial (DAG 10 steps). Service-Based Routing por manifest: Nikto/WhatWeb solo con endpoints web, Gobuster multi-modo, SSLyze solo sobre puertos TLS, IIS-Shortname solo con firmware Microsoft-IIS (httpx.json), SMB-Enum solo con 139/445 abiertos; WhatWeb SALTADO por usuario en Fase 0.\n")
     L.append("Parámetros stealth: `" + json.dumps(report['methodology']['stealth_params']) + "`\n")
     L.append("## 3. Por target\n")
     for t in report['targets']:

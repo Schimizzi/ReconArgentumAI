@@ -206,9 +206,19 @@ Si N = 0:
 ⚠️ {TARGET}: No se encontraron hallazgos explícitos en ninguno de los
 archivos fuente. No se generaron reportes.
 ```
-Además, si existían reportes previos (`_resumen_*.doc` / `.txt`) quedaron
-**obsoletos** y se **eliminan** (a menos que el análisis sea `--dry-run`),
-para no entregar información desactualizada al cliente.
+El historial acumulado (corridas previas) **se conserva intacto**: una corrida
+sin hallazgos no borra ni agrega nada a los `_resumen_*.doc` / `.txt` existentes.
+
+**Acumulación de corridas (append):** cada corrida exitosa (N ≥ 1) AGREGA una
+marca de corrida con el horario y concatena el reporte tras la corrida anterior,
+en ambos archivos:
+
+- `.txt`: `# ===== corrida <YYYY-MM-DD HH:MM:SS> =====` + bloque de hallazgos.
+- `.doc`: `<hr class="corrida">` + `Corrida del reporte: <fecha>` + bloque HTML.
+
+No se sobrescribe el reporte anterior. Para arrancar el historial de cero existe
+`--reset` (borra los dos reportes del target y regenera una única corrida).
+`--no-clobber` evita acumular: si el reporte ya existe, no escribe nada.
 
 ## 8. Ejecución
 
@@ -225,5 +235,6 @@ python3 scripts/make_vuln_report.py --dry-run --project CLIENTE
 | `--project NOMBRE` | Directorio destino (default: `CLIENTE`). |
 | `--target IP` | Procesar solo ese target (repetible). |
 | `--dry-run` | Previsualiza la estructura; no crea archivos. |
-| `--no-clobber` | No sobrescribir reportes ya existentes. |
+| `--no-clobber` | No sobrescribir reportes ya existentes (no acumula corridas). |
+| `--reset` | Borrar los reportes previos del target y arrancar de cero. |
    líneas que contengan `CVE-`, `Severity:`, `VULN-`, `hallazgo`, etc.).

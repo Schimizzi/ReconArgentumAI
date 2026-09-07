@@ -7,8 +7,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     NUCLEI_VERSION=3.11.1
 
 # 1) Base + tools vía apt (nmap, nikto, whatweb, gobuster, jq) + deps
+# UNIFICACIÓN KALI/DOCKER (2026-09-07): se agregan samba-client (Step 10 SMB Enum)
+# e iputils-ping (preflight + ping gate del Step 10) para que el Agente 1 completo
+# (Steps 1-10) corra dentro del contenedor SIN necesitar un LLM, igual que en la VM.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         nmap nikto whatweb gobuster jq \
+        samba-client iputils-ping \
         git curl ca-certificates unzip xz-utils \
         python3 python3-pip \
     && rm -rf /var/lib/apt/lists/*
@@ -35,10 +39,11 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages sslyze
 # 6) Workspace
 WORKDIR /workspace
 
-# Sanity check: el build FALLA si falta alguna de las 7 tools + jq
+# Sanity check: el build FALLA si falta alguna de las 9 tools del Agente 1 + jq
 RUN set -eux; \
     command -v nmap; command -v httpx-pd; command -v nuclei; \
     command -v nikto; command -v whatweb; command -v gobuster; \
-    command -v sslyze; command -v jq
+    command -v sslyze; command -v smbclient; \
+    command -v ping; command -v jq
 
 CMD ["bash"]

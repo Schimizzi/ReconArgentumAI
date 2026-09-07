@@ -25,7 +25,7 @@
 
 # Resultados consolidados por scripts/organize_project.py (mismos datos sensibles
 # del engagement, organizados por proyecto). Nombre fijo del directorio destino.
-/CLIENTE/
+/CLIENTE*/
 
 # Configuración del engagement: scope.json (IPs autorizadas), approved_commands.md
 # (comandos aprobados) y stealth.yaml (parámetros de bajo ruido).

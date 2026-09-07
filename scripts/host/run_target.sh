@@ -1,6 +1,6 @@
 #!/bin/bash
 # ===========================================================================
-# run_target.sh — Orquestador MODO HOST por target (DAG 8 steps / 7 tools)
+# run_target.sh — Orquestador MODO HOST por target (DAG 10 steps / 9 tools)
 # Uso: run_target.sh <TARGET_IP>
 # Respeta R1 (scope), R3 (delays 30s entre tools), R4 (evidencia completa),
 # y el retry 1x de la spec (§5). Genera evidence/<target> + manifest.json.
@@ -87,7 +87,7 @@ run_retry() {
 }
 
 # ---- Step 1: Nmap port scan --------------------------------------------------
-log "Step 1/8 - Nmap port scan --top-ports 1000 (-sT, -Pn -n, timing/rate default de Nmap) sobre $TARGET"
+log "Step 1/10 - Nmap port scan --top-ports 1000 (-sT, -Pn -n, timing/rate default de Nmap) sobre $TARGET"
 R1=$(run_retry nmap_ports bash "$WS/scripts/host/step1_nmap_ports.sh" "$TARGET")
 
 # ---- Post-proceso Step 1: open_ports.txt -------------------------------------
@@ -107,7 +107,7 @@ if [ "$NPORTS" -eq 0 ]; then
   "target_id": "$TARGET_ID",
   "started_at": "$STARTED",
   "status": "incomplete",
-  "notes": "Sin puertos abiertos (--top-ports 1000 aprobado, Step 1). Steps 2-8 skipped (Service-Based Routing).",
+  "notes": "Sin puertos abiertos (--top-ports 1000 aprobado, Step 1). Steps 2-10 skipped (Service-Based Routing).",
   "tools_executed": [
     {"step": 1, "tool": "nmap_ports", "status": "$R1", "output": ["nmap_ports.json", "nmap_ports.xml", "nmap_ports.txt", "nmap_ports.gnmap", "open_ports.txt"]},
     {"step": 2, "tool": "httpx", "status": "skipped_no_ports", "output": []},
@@ -116,7 +116,9 @@ if [ "$NPORTS" -eq 0 ]; then
     {"step": 5, "tool": "nikto", "status": "skipped_no_web", "output": []},
     {"step": 6, "tool": "whatweb", "status": "skipped", "output": []},
     {"step": 7, "tool": "gobuster", "status": "skipped_no_web", "output": []},
-    {"step": 8, "tool": "sslyze", "status": "skipped_no_tls", "output": []}
+    {"step": 8, "tool": "sslyze", "status": "skipped_no_tls", "output": []},
+    {"step": 9, "tool": "iis_shortname", "status": "skipped_no_iis", "output": []},
+    {"step": 10, "tool": "smbclient_enum", "status": "skipped_no_smb", "output": []}
   ],
   "out_of_scope_findings": [],
   "errors": []
@@ -128,7 +130,7 @@ fi
 log "✅ Puertos abiertos: $(tr '\n' ' ' < "$EVID/open_ports.txt")"
 sleep "$DELAY_TOOLS"
 # ---- Step 2: HTTPX probe -----------------------------------------------------
-log "Step 2/8 — HTTPX probe web"
+log "Step 2/10 — HTTPX probe web"
 R2=$(run_retry httpx bash "$WS/scripts/host/step2_httpx.sh" "$TARGET")
 
 # post-proceso: web_endpoints.txt desde httpx.json
@@ -140,7 +142,7 @@ log "✅ Endpoints web: ${WURLS}"
 sleep "$DELAY_TOOLS"
 
 # ---- Step 3: Nmap detallado (siempre, sobre open_ports) ----------------------
-log "Step 3/8 — Nmap -sT -sC -sV detallado (solo puertos abiertos)"
+log "Step 3/10 — Nmap -sT -sC -sV detallado (solo puertos abiertos)"
 R3=$(run_retry nmap_detailed bash "$WS/scripts/host/step3_nmap_detailed.sh" "$TARGET")
 # ---- Steps 4-8: Service-Based Routing (Optimización Multiprotocolo 2026-08-31) ----
 web_on() { [ "${WURLS:-0}" -gt 0 ]; }
@@ -153,7 +155,7 @@ OUT4='[]'; OUT5='[]'; OUT6='[]'; OUT7='[]'; OUT8='[]'
 # Nuclei ya NO depende de web_endpoints.txt. Apunta a IP:PORT para aplicar plantillas
 # de red/SSH/DNS/TLS además de las web. (Optimización Multiprotocolo 2026-08-31)
 if [ "$NPORTS" -gt 0 ]; then
-  log "Step 4/8 — Nuclei (multiprotocolo, sobre open_ports.txt)"
+  log "Step 4/10 — Nuclei (multiprotocolo, sobre open_ports.txt)"
   R4=$(run_retry nuclei bash "$WS/scripts/host/step4_nuclei.sh" "$TARGET")
   STATUS4=success; [ "$R4" = FAIL ] && STATUS4=failed
   sleep "$DELAY_TOOLS"
@@ -162,7 +164,7 @@ else
 fi
 
 if web_on; then
-  log "Step 5/8 — Nikto (solo web, por endpoint, secuencial)"
+  log "Step 5/10 — Nikto (solo web, por endpoint, secuencial)"
   STATUS5=success
   # FIX ROOT-CAUSE 2026-08-31: cargar las URLs UNA vez a un array ANTES del loop.
   # Un `while read < archivo` compartia el fd con los hijos (nikto lee stdin) y el
@@ -188,7 +190,7 @@ if web_on; then
   done < "$EVID/web_endpoints.txt"
   sleep "$DELAY_TOOLS"
 
-  log "Step 6/8 — WhatWeb: SALTADO por usuario (Fase 0 DREAMCO-2026; no instalado)"
+  log "Step 6/10 — WhatWeb: SALTADO por usuario (Fase 0 DREAMCO-2026; no instalado)"
   STATUS6=skipped   # SALTADO por usuario (approved_commands.md); no se ejecuta
   sleep "$DELAY_TOOLS"
 else
@@ -197,7 +199,7 @@ else
 fi
 
 # ---- Step 7: Gobuster — multi-modo dir/dns/tftp ------------------------------------
-log "Step 7/8 — Gobuster (Service-Based: dir si web, dns si dominio, tftp si UDP69)"
+log "Step 7/10 — Gobuster (Service-Based: dir si web, dns si dominio, tftp si UDP69)"
 STATUS7=skipped_no_web
 RAN7=0; FAILED7=0
 
@@ -265,7 +267,7 @@ elif [ "$FAILED7" -eq 1 ]; then
 fi
 
 # ---- Step 8: SSLyze — puertos TLS detectados por Nmap (Step 3) ----------------------
-log "Step 8/8 — SSLyze (puertos TLS del Step 3, Service-Based)"
+log "Step 8/10 — SSLyze (puertos TLS del Step 3, Service-Based)"
 STATUS8=skipped_no_tls
 TLS_LINES=$(python3 "$WS/scripts/host/detect_tls_ports.py" "$EVID" --with-starttls 2>/dev/null || true)
 if [ -n "$TLS_LINES" ]; then
@@ -276,6 +278,85 @@ if [ -n "$TLS_LINES" ]; then
     R=$(run_retry "sslyze:$TPORT" bash "$WS/scripts/host/step8_sslyze.sh" "$TARGET" "$TPORT" "$TMODE" "$TSTARTPROTO" </dev/null)
     [ "$R" = FAIL ] && STATUS8=failed
   done <<< "$TLS_LINES"
+fi
+sleep "$DELAY_TOOLS"
+# ---- Step 9: IIS Shortname (Service-Based: solo si web_on + firma IIS en httpx.json) ----
+log "Step 9/10 — IIS Shortname Disclosure 8.3 (requiere web + firmware Microsoft-IIS en httpx.json)"
+STATUS9=skipped_no_iis
+if web_on && [ -s "$EVID/httpx.json" ]; then
+  IIS_HTTPX=$(python3 - "$EVID/httpx.json" <<'PY' 2>/dev/null
+import json, sys
+detected = []
+try:
+    for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            o = json.loads(line)
+        except Exception:
+            continue
+        ws = (o.get("webserver") or "")
+        if ("iis" in ws.lower() or "microsoft-iis" in ws.lower()) and not o.get("failed"):
+            detected.append(o.get("url") or "")
+except Exception:
+    pass
+print("\n".join(sorted(set(detected))))
+PY
+)
+  if [ -n "$IIS_HTTPX" ]; then
+    log "  → IIS detectado en httpx.json: $(echo "$IIS_HTTPX" | tr '\n' ' ')"
+    R9=$(run_retry iis_shortname python3 "$WS/scripts/host/step9_iis_shortname_scan.py" --ev-dir "$EVID" --target "$TARGET" </dev/null)
+    if [ "$R9" = OK ] || [ "$R9" = OK_RETRY ]; then STATUS9=success; else STATUS9=failed; fi
+  else
+    log "  → sin firma Microsoft-IIS en httpx.json → skipped_no_iis"
+    STATUS9=skipped_no_iis
+  fi
+else
+  log "  → sin web (no web_on) o sin httpx.json → skipped_no_iis"
+  STATUS9=skipped_no_iis
+fi
+sleep "$DELAY_TOOLS"
+
+# ---- Step 10: SMB Enum (Service-Based: solo si TCP 139/445 están abiertos) -----------------
+# Misma filosofía que Nuclei: se decide con open_ports.txt (Step 1) y se confirma
+# con nmap_detailed.xml (Step 3). step10_smbclient_enum.sh en modo --ev-dir escribe
+# directo en evidence/<IP>/. --force para que el pipeline sobrescriba evidencia
+# previa (al contrario del no-clobber del modo manual). --no-ping-check porque el
+# target ya respondió en Steps 1-3 del propio pipeline (no duplicar el gate ICMP).
+log "Step 10/10 — smbclient_enum (SMB 139/445, solo si abiertos)"
+STATUS10=skipped_no_smb
+HAS_SMB=0
+if [ -s "$EVID/open_ports.txt" ]; then
+  if grep -qE ':(139|445)$' "$EVID/open_ports.txt"; then HAS_SMB=1; fi
+fi
+if [ "$HAS_SMB" -eq 0 ] && [ -s "$EVID/nmap_detailed.xml" ]; then
+  SMB_XML=$(python3 - "$EVID/nmap_detailed.xml" <<'PY' 2>/dev/null
+import sys, xml.etree.ElementTree as ET
+try:
+    tree = ET.parse(sys.argv[1])
+except Exception:
+    sys.exit(0)
+found = 0
+for p in tree.iter('port'):
+    st = p.find('state')
+    if st is None or st.get('state') != 'open':
+        continue
+    if p.get('protocol') == 'tcp' and p.get('portid') in ('139', '445'):
+        found = 1
+        break
+print(found)
+PY
+)
+  [ "$SMB_XML" = "1" ] && HAS_SMB=1
+fi
+if [ "$HAS_SMB" -eq 1 ]; then
+  log "  → SMB (139/445) abierto en $TARGET"
+  R10=$(run_retry smbclient_enum bash "$WS/scripts/host/step10_smbclient_enum.sh" --ev-dir "$EVID" --force --no-ping-check </dev/null)
+  if [ "$R10" = OK ] || [ "$R10" = OK_RETRY ]; then STATUS10=success; else STATUS10=failed; fi
+else
+  log "  → sin 139/445 en open_ports.txt ni nmap_detailed.xml → skipped_no_smb"
+  STATUS10=skipped_no_smb
 fi
 sleep "$DELAY_TOOLS"
 # ---- Manifest ----------------------------------------------------------------
@@ -304,6 +385,7 @@ OUT2=$(mkjson 'httpx.json web_endpoints.txt')
 OUT3=$(mkjson 'nmap_detailed.*')
 OUT4=$(mkjson 'nuclei.json'); OUT5=$(mkjson 'nikto_*.json')
 OUT6=$(mkjson 'whatweb.json'); OUT7=$(mkjson 'gobuster_*.txt udp_69.gnmap'); OUT8=$(mkjson 'sslyze_*.json')
+OUT9=$(mkjson 'iis_shortname_* iis_scan_urls.txt'); OUT10=$(mkjson 'smbclient_*.txt smbclient_summary.txt')
 
 cat > "$EVID/manifest.json" <<EOF
 {
@@ -319,7 +401,9 @@ cat > "$EVID/manifest.json" <<EOF
     {"step": 5, "tool": "nikto", "status": "$STATUS5", "output": $OUT5},
     {"step": 6, "tool": "whatweb", "status": "$STATUS6", "output": $OUT6},
     {"step": 7, "tool": "gobuster", "status": "$STATUS7", "output": $OUT7},
-    {"step": 8, "tool": "sslyze", "status": "$STATUS8", "output": $OUT8}
+    {"step": 8, "tool": "sslyze", "status": "$STATUS8", "output": $OUT8},
+    {"step": 9, "tool": "iis_shortname", "status": "$STATUS9", "output": $OUT9},
+    {"step": 10, "tool": "smbclient_enum", "status": "$STATUS10", "output": $OUT10}
   ],
   "out_of_scope_findings": [],
   "errors": $ERRORS_JSON

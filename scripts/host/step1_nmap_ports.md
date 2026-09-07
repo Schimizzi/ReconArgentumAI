@@ -2,11 +2,11 @@
 
 ## 🧩 ¿Qué es?
 
-Es el **paso 1 del escaneo** en su versión para **modo Host (Mac)**. Usa **Nmap** para descubrir
+Es el **paso 1 del escaneo** (script unificado: modo Host, VM Kali y contenedor Docker). Usa **Nmap** para descubrir
 qué **puertos/servicios** de un objetivo están abiertos.
 
-En la Mac no hay permisos privilegiados para el escaneo "sigiloso", por eso acá Nmap se usa en
-modo "Connect Scan" (`-sT`), que es el que funciona sin privilegios de administrador.
+El tipo de escaneo se **autodetecta por privilegios**: si el proceso corre como **root** (VM Kali, contenedor) usa el escaneo **SYN** (`-sS`);
+si no (Mac sin sudo) usa **"Connect Scan"** (`-sT`), que funciona sin privilegios.
 
 ## ⏱️ ¿Cuándo se usa?
 

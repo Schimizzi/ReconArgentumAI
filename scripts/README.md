@@ -41,7 +41,7 @@ Cada `.md` que acompaña a un script explica, sin código:
 | `nvd_query.py` | Busca vulnerabilidades conocidas (CVE) por palabra clave | [▶ nvd_query.md](nvd_query.md) |
 | `nvd_cve_detail.py` | Trae el detalle de un CVE específico | [▶ nvd_cve_detail.md](nvd_cve_detail.md) |
 | `organize_project.py` | Ordena y consolida toda la evidencia en la carpeta del cliente | [▶ organize_project.md](organize_project.md) |
-| `make_vuln_report.py` | Genera los informes de vulnerabilidades (Agente 6) | [▶ make_vuln_report.md](make_vuln_report.md) |
+| `make_vuln_report.py` | Genera los informes de vulnerabilidades (Agente 6) — acumula corridas con horario | [▶ make_vuln_report.md](make_vuln_report.md) |
 | `cleanup_engagement.sh` | Borra toda la evidencia del cliente y deja el repo listo para el próximo | [▶ cleanup_engagement.md](cleanup_engagement.md) |
 
 ### Scripts del pipeline de escaneo (`scripts/host/`)
@@ -49,11 +49,13 @@ Cada `.md` que acompaña a un script explica, sin código:
 | Script | Qué hace (resumen) | Documento |
 |---|---|---|
 | `run_fase1_run3.sh` | Recorre todos los objetivos autorizados y los escanea uno por uno | [▶ run_fase1_run3.md](host/run_fase1_run3.md) |
-| `run_target.sh` | Director del escaneo de un solo objetivo (8 pasos) | [▶ run_target.md](host/run_target.md) |
+| `run_target.sh` | Director del escaneo de un solo objetivo (10 pasos) | [▶ run_target.md](host/run_target.md) |
 | `make_report.py` | Genera el informe final + informe por objetivo (Agente 5) | [▶ make_report.md](host/make_report.md) |
 | `detect_tls_ports.py` | Detecta qué puertos usan cifrado TLS (para SSLyze) | [▶ detect_tls_ports.md](host/detect_tls_ports.md) |
+| `step9_iis_shortname_scan.py` | Detecta y enumera IIS Short File Name Disclosure (8.3) — integrado como Step 9, con modo manual `--proyecto CLIENTE` intacto | [▶ step9_iis_shortname_scan.md](host/step9_iis_shortname_scan.md) |
+| `step10_smbclient_enum.sh` | Enumeración anónima (null session) de recursos SMB (139/445) — integrado como Step 10, con modo manual `--all` intacto | [▶ step10_smbclient_enum.md](host/step10_smbclient_enum.md) |
 
-**Los 8 pasos del escaneo:**
+**Los 10 pasos del escaneo:**
 
 | Paso | Script | Qué herramienta usa | Documento |
 |---|---|---|---|
@@ -67,13 +69,15 @@ Cada `.md` que acompaña a un script explica, sin código:
 | 7 | `step7_gobuster.sh` | Gobuster — carpetas ocultas | [▶ paso 7](host/step7_gobuster.md) |
 | 7 aux | `step7_udp_probe.sh` | Nmap — sondea TFTP (UDP 69) | [▶ paso 7 aux](host/step7_udp_probe.md) |
 | 8 | `step8_sslyze.sh` | SSLyze — seguridad de conexiones cifradas | [▶ paso 8](host/step8_sslyze.md) |
+| 9 | `step9_iis_shortname_scan.py` | IIS Shortname 8.3 — solo si `web_on` y el `httpx.json` reporta `Server: Microsoft-IIS` | [▶ paso 9](host/step9_iis_shortname_scan.md) |
+| 10 | `step10_smbclient_enum.sh` | smbclient — comparte SMB (139/445) abiertos | [▶ paso 10](host/step10_smbclient_enum.md) |
 ---
 
 ## 🧭 Conceptos rápidos
 
 - **Script:** un archivo con pasos que la computadora ejecuta sola (una "receta").
 - **Terminal/consola:** la ventana donde se ejecutan a mano estos archivos.
-- **Pipeline:** el proceso completo de escaneo → análisis → informe (8 pasos).
+- **Pipeline:** el proceso completo de escaneo → análisis → informe (10 pasos).
 - **Objetivo (target):** el equipo (IP) de la red que se revisa, **siempre con autorización**.
 - **Herramientas:** programas como Nmap, HTTPX, Nuclei, Nikto, Gobuster o SSLyze; los scripts los
   organizan y automatizan.

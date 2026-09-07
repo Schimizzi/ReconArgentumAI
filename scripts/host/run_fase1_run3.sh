@@ -3,7 +3,7 @@
 # run_fase1_run3.sh — Runner maestro FASE 1 RUN#3 (DREAMCO-2026, 13 targets)
 # Recorre authorized_targets[] de config/scope.json EN ORDEN, secuencial (R3),
 # con delay entre targets desde config/stealth.yaml. Por target invoca
-# run_target.sh <IP> (8 steps, delays entre tools, retry 1x, manifest.json).
+# run_target.sh <IP> (10 steps, delays entre tools, retry 1x, manifest.json).
 # Log por target: logs/fase1_<IP>.log.
 # Uso: run_fase1_run3.sh [--dry-run]
 # =============================================================================

@@ -3,7 +3,7 @@
 ## 🧩 ¿Qué es?
 
 Es **el "director de orquesta" del escaneo** para un solo objetivo (una IP). Recibe la IP y
-ejecuta, en orden y respetando tiempos de espera, **los 8 pasos** del pipeline de reconocimiento:
+ejecuta, en orden y respetando tiempos de espera, **los 10 pasos** del pipeline de reconocimiento:
 
 1. **Nmap** — ver qué puertos/servicios están abiertos.
 2. **HTTPX** — cuáles son sitios web.
@@ -13,6 +13,11 @@ ejecuta, en orden y respetando tiempos de espera, **los 8 pasos** del pipeline d
 6. **WhatWeb** — identifica tecnologías (está "saltado" por decisión del usuario en este proyecto).
 7. **Gobuster** — descubre carpetas ocultas.
 8. **SSLyze** — analiza seguridad de conexiones cifradas.
+9. **IIS Shortname (8.3)** — detecta divulgación de nombres cortos de IIS, **solo si** hay web
+   (`web_on`) y el `httpx.json` reporta `Server: Microsoft-IIS`; si no, queda `skipped_no_iis`.
+10. **SMB Enum** (`step10_smbclient_enum.sh`) — lista recursos compartidos SMB vía *null session*,
+    **solo si** el TCP 139/445 está abierto (`open_ports.txt` o `nmap_detailed.xml`, service-based
+    como Nuclei); si no, queda `skipped_no_smb`.
 
 Al final genera el **manifest.json**: la "ficha" que registra qué se ejecutó, qué produjo cada
 paso y si hubo errores.
