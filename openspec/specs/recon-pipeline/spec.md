@@ -2,16 +2,16 @@
 
 ## Purpose
 
-Define la ejecución secuencial del pipeline de recon contra cada target: el DAG lineal de 8 steps sobre las 7 herramientas, los inputs/outputs y post-procesos por step, el **Service-Based Routing** por step (herramientas multiprotocolo como Nuclei/Gobuster/SSLyze se ejecutan según servicios detectados, no solo según endpoints web), los timeouts parametrizados desde `config/stealth.yaml`, el manifest por target y el manejo de errores.
+Define la ejecución secuencial del pipeline de recon contra cada target: el DAG lineal de 10 steps sobre las 9 herramientas, los inputs/outputs y post-procesos por step, el **Service-Based Routing** por step (herramientas multiprotocolo como Nuclei/Gobuster/SSLyze/IIS-Shortname/SMB-Enum se ejecutan según servicios detectados, no solo según endpoints web), los timeouts parametrizados desde `config/stealth.yaml`, el manifest por target y el manejo de errores.
 
 ## Requirements
 
 ### Requirement: DAG secuencial de recon
-El sistema SHALL ejecutar los steps en este orden lineal, uno por target y sin paralelismo: (1) Nmap port scan → (2) HTTPX probe web → (3) Nmap -sC -sV detallado solo sobre puertos abiertos → (4) Nuclei → (5) Nikto → (6) WhatWeb → (7) Gobuster/Dirsearch → (8) SSLyze.
+El sistema SHALL ejecutar los steps en este orden lineal, uno por target y sin paralelismo: (1) Nmap port scan → (2) HTTPX probe web → (3) Nmap -sC -sV detallado solo sobre puertos abiertos → (4) Nuclei → (5) Nikto → (6) WhatWeb → (7) Gobuster/Dirsearch → (8) SSLyze → (9) IIS Shortname (8.3) → (10) SMB Enum (smbclient).
 
 #### Scenario: Ejecución completa de un target con servicios web
 - **WHEN** el pipeline procesa un target que tiene al menos un endpoint web confirmado por HTTPX
-- **THEN** los 8 steps se ejecutan en orden, con el delay de stealth entre cada uno
+- **THEN** los 10 steps se ejecutan en orden, con el delay de stealth entre cada uno
 
 ### Requirement: Step 1 — Port scan inicial
 El sistema SHALL ejecutar Nmap sobre el target con los parámetros aprobados en Fase 0, guardando `nmap_ports.xml` y `nmap_ports.json` completos en `evidence/<target>/`. Como post-proceso SHALL extraer los puertos abiertos en formato `IP:PORT` (uno por línea) a `evidence/<target>/open_ports.txt`.
@@ -32,7 +32,7 @@ El sistema SHALL ejecutar HTTPX sobre `open_ports.txt`, guardando `httpx.json` c
 - **THEN** `web_endpoints.txt` contiene una URL por línea, solo aquellas con esquema http o https
 
 ### Requirement: Service-Based Routing por step (Optimización Multiprotocolo)
-El sistema SHALL decidir la ejecución de los Steps 4-8 según los servicios detectados por step
+El sistema SHALL decidir la ejecución de los Steps 4-10 según los servicios detectados por step
 (Service-Based Routing, 2026-08-31), NO aplanar los steps ante la ausencia de web. El sistema
 SHALL ejecutar: **Nuclei (Step 4)** SIEMPRE que `open_ports.txt` tenga ≥1 puerto abierto,
 apuntando a las líneas `IP:PORT` para aplicar plantillas multiprotocolo (red, SSH, DNS, TLS,
@@ -43,12 +43,29 @@ web, `dns` si el target es un dominio (no IP cruda), y `tftp` si el puerto 69/UD
 los puertos con túnel SSL/TLS detectados en la salida de Nmap del Step 3 (tunnel="ssl",
 servicios TLS conocidos, puertos TLS bien conocidos: 443/465/636/990/992/993/995/3389-RDP/
 5986-WinRM/etc.), con soporte `--starttls` (rdp, smtp, imap, pop3, ftp, ldap, postgres).
+**IIS Shortname (Step 9)** SHALL ejecutarse solo si `web_on` es verdadero (hay endpoints web
+confirmados por HTTPX) y el `httpx.json` del Step 2 reporta la firma del servidor
+`Microsoft-IIS`/`IIS` en el campo `webserver`; se ejecuta con `step9_iis_shortname_scan.py --ev-dir`
+sobre el dir de evidencia del target. **SMB Enum (Step 10)** SHALL ejecutarse solo si los
+puertos TCP 139 o 445 figuran abiertos en `open_ports.txt` (Step 1) o en `nmap_detailed.xml`
+(Step 3), mediante `step10_smbclient_enum.sh --ev-dir` (null session, solo lectura).
 
 #### Scenario: Target sin web pero con puertos abiertos no-web
 - **WHEN** tras el Step 2 `web_endpoints.txt` está vacío pero `open_ports.txt` tiene SMB/RDP/SSH abiertos
 - **THEN** Nuclei se ejecuta contra `open_ports.txt` (plantillas no-web), Nikto/WhatWeb se marcan
-  `skipped_no_web`, Gobuster evalúa su modo según dominio/UDP69, y SSLyze audita los puertos TLS
-  detectados (ej. 3389-RDP con `--starttls rdp` o 5986-WinRM)
+  `skipped_no_web`, Gobuster evalúa su modo según dominio/UDP69, SSLyze audita los puertos TLS
+  detectados (ej. 3389-RDP con `--starttls rdp` o 5986-WinRM), IIS Shortname queda
+  `skipped_no_iis` (no hay web) y SMB Enum se ejecuta si 139/445 están abiertos (o queda
+  `skipped_no_smb` si no lo están).
+
+#### Scenario: Target con web no-IIS
+- **WHEN** hay endpoints web pero el `httpx.json` no reporta `webserver` con `IIS`/`Microsoft-IIS`
+- **THEN** el Step 9 queda `skipped_no_iis` y no se envía ningún request de tilde enumeration
+
+#### Scenario: Target con SMB abierto
+- **WHEN** `open_ports.txt` o `nmap_detailed.xml` reporta TCP 139 o 445 abierto
+- **THEN** el Step 10 ejecuta `step10_smbclient_enum.sh --ev-dir evidence/<target>` (null session
+  `-N`, solo lectura) y genera `smbclient_shares.txt`/`smbclient_<share>.txt`
 
 #### Scenario: Puerto TLS no-https detectado por Nmap
 - **WHEN** el Step 3 detecta un servicio con `tunnel="ssl"` o un puerto TLS conocido (993 IMAPS, 990 FTPS, 3389 RDP, 5986 WinRM)
@@ -64,7 +81,7 @@ servicios TLS conocidos, puertos TLS bien conocidos: 443/465/636/990/992/993/995
 
 #### Scenario: Sin puertos abiertos en Step 1
 - **WHEN** `open_ports.txt` queda vacío tras un Step 1 exitoso
-- **THEN** el target se registra `incomplete` y los Steps 2-8 quedan `skipped` en el manifest
+- **THEN** el target se registra `incomplete` y los Steps 2-10 quedan `skipped` en el manifest
 
 ### Requirement: Step 3 — Scan detallado solo de puertos abiertos
 El sistema SHALL ejecutar Nmap -sC -sV únicamente sobre los puertos que el Step 1 confirmó abiertos (nunca sobre un rango completo), guardando `nmap_detailed.json`, `nmap_detailed.xml` y `nmap_detailed.txt` completos.
@@ -92,15 +109,15 @@ El sistema SHALL NO hardcodear timeouts, rate-limits ni cantidades de threads en
 - **THEN** el comando de HTTPX propuesto y ejecutado usa 20s sin necesidad de editar la spec del pipeline
 
 ### Requirement: Manifest por target
-Al terminar el pipeline de un target, el sistema SHALL generar `evidence/<target>/manifest.json` con: target e ID, timestamps de inicio/fin, lista de tools ejecutados (step, tool, status, output), `out_of_scope_findings` y `errors`. Los estados válidos de `status` son: `success`, `failed`, `skipped` (WhatWeb SALTADO por usuario), `skipped_no_ports` (Nuclei/HTTPX sin puertos), `skipped_no_web` (Nikto/WhatWeb/Gobuster-dir sin web), `skipped_no_domain`, `skipped_no_tftp`, `skipped_no_tls`. `tools_executed` SHALL contener siempre los 8 steps (entradas completas, inclusive las saltadas).
+Al terminar el pipeline de un target, el sistema SHALL generar `evidence/<target>/manifest.json` con: target e ID, timestamps de inicio/fin, lista de tools ejecutados (step, tool, status, output), `out_of_scope_findings` y `errors`. Los estados válidos de `status` son: `success`, `failed`, `skipped` (WhatWeb SALTADO por usuario), `skipped_no_ports` (Nuclei/HTTPX sin puertos), `skipped_no_web` (Nikto/WhatWeb/Gobuster-dir sin web), `skipped_no_domain`, `skipped_no_tftp`, `skipped_no_tls`, `skipped_no_iis` (Step 9 sin web o sin firma Microsoft-IIS en httpx.json), `skipped_no_smb` (Step 10 sin 139/445 abiertos). `tools_executed` SHALL contener siempre los 10 steps (entradas completas, inclusive las saltadas).
 
 #### Scenario: Manifest de target completo
 - **WHEN** el pipeline termina un target sin fallos
-- **THEN** `manifest.json` existe y lista los 8 steps con estado `success` y sus archivos de output
+- **THEN** `manifest.json` existe y lista los 10 steps con estado `success` y sus archivos de output
 
 #### Scenario: Target sin puertos abiertos
 - **WHEN** el Step 1 no reporta puertos abiertos
-- **THEN** el manifest registra el target `incomplete` y los Steps 2-8 quedan `skipped` con estados específicos
+- **THEN** el manifest registra el target `incomplete` y los Steps 2-10 quedan `skipped` con estados específicos
 
 ### Requirement: Manejo de errores por herramienta
 Si una herramienta falla, el sistema SHALL reintentar UNA vez con el mismo comando. Si vuelve a fallar, SHALL marcarla `failed` con su error en el manifest y continuar con el step siguiente sin abortar el target completo (excepción: Step 1, que marca el target `incomplete`).

@@ -10,12 +10,41 @@
 # servers web que NO responden a dict requests (timeouts en ~23.7k requests =
 # horas) bloquearon el step7 en 10.10.10.154/153.
 # EVOLUCIÓN del subshell con wait: la evidencia gobuster_*.txt se escribe igual.
+# UNIFICACIÓN KALI/DOCKER (2026-09-07): las wordlists se resuelven de forma portable
+# probando las ubicaciones típicas en este orden:
+#   1. /opt/SecLists/...              (dentro del contenedor Kali del Dockerfile)
+#   2. ${HOME}/Documents/SecLists/... (host macOS del pipeline original)
+#   3. ${WORKSPACE}/tools/seclists_common.txt (cache web local del repo, si existe)
+# Así la VM Kali y el contenedor usan los MISMO scripts sin tocar paths hardcodeados.
 set -uo pipefail
 WORKSPACE="${WORKSPACE:-$(pwd)}"
 TARGET="$1"; ARG="$2"; PORT="$3"; MODE="$4"
 EVID="$WORKSPACE/evidence/$TARGET"
-WEB_LIST="${HOME}/Documents/SecLists/Discovery/Web-Content/common.txt"
-DNS_LIST="${HOME}/Documents/SecLists/Discovery/DNS/subdomains-top1million-5000.txt"
+
+# resolve_wordlist <tipo> — imprime la primera wordlist existente (o nada).
+#   tipo=web → common.txt; tipo=dns → subdomains-top1million-5000.txt
+resolve_wordlist() {
+  local tipo="$1" rel=""
+  case "$tipo" in
+    web) rel="Discovery/Web-Content/common.txt" ;;
+    dns) rel="Discovery/DNS/subdomains-top1million-5000.txt" ;;
+    *)   return 1 ;;
+  esac
+  local cand=""
+  for cand in \
+      "/opt/SecLists/$rel" \
+      "${HOME}/Documents/SecLists/$rel"; do
+    if [ -s "$cand" ]; then
+      printf '%s\n' "$cand"; return 0
+    fi
+  done
+  # cache local del repo (solo web)
+  if [ "$tipo" = "web" ] && [ -s "$WORKSPACE/tools/seclists_common.txt" ]; then
+    printf '%s\n' "$WORKSPACE/tools/seclists_common.txt"; return 0
+  fi
+  return 1
+}
+
 TH=$(awk '/^gobuster_threads:/ {print $2; exit}' "$WORKSPACE/config/stealth.yaml")
 TO=$(awk '/^gobuster_timeout_seconds:/ {print $2; exit}' "$WORKSPACE/config/stealth.yaml")
 CUT=$(awk '/^gobuster_max_seconds:/ {print $2; exit}' "$WORKSPACE/config/stealth.yaml")
@@ -50,7 +79,10 @@ run_cutoff() {
 
 case "$MODE" in
   dir)
-    if [ ! -s "$WEB_LIST" ]; then echo "ERROR: wordlist web no encontrada en $WEB_LIST" >&2; exit 1; fi
+    WEB_LIST="$(resolve_wordlist web)"
+    if [ -z "$WEB_LIST" ]; then
+      echo "ERROR: wordlist web no encontrada (busque en /opt/SecLists, ~/Documents/SecLists o tools/seclists_common.txt)" >&2; exit 1
+    fi
     if ! run_cutoff gobuster dir \
       -u "$ARG" \
       -w "$WEB_LIST" \
@@ -67,7 +99,10 @@ case "$MODE" in
     echo "STEP7_HOST_OK mode=dir port=${PORT}"
     ;;
   dns)
-    if [ ! -s "$DNS_LIST" ]; then echo "ERROR: wordlist dns no encontrada en $DNS_LIST" >&2; exit 1; fi
+    DNS_LIST="$(resolve_wordlist dns)"
+    if [ -z "$DNS_LIST" ]; then
+      echo "ERROR: wordlist dns no encontrada (busque en /opt/SecLists o ~/Documents/SecLists)" >&2; exit 1
+    fi
     DOMAIN=$(printf '%s' "$ARG" | sed -E 's|^[a-zA-Z][a-zA-Z0-9+.-]*://||; s|[/?#].*$||')
     if ! run_cutoff gobuster dns \
       -d "$DOMAIN" \
@@ -81,7 +116,10 @@ case "$MODE" in
     echo "STEP7_HOST_OK mode=dns domain=$DOMAIN"
     ;;
   tftp)
-    if [ ! -s "$WEB_LIST" ]; then echo "ERROR: wordlist web no encontrada en $WEB_LIST" >&2; exit 1; fi
+    WEB_LIST="$(resolve_wordlist web)"
+    if [ -z "$WEB_LIST" ]; then
+      echo "ERROR: wordlist web no encontrada (busque en /opt/SecLists, ~/Documents/SecLists o tools/seclists_common.txt)" >&2; exit 1
+    fi
     if [ "$PORT" != "0" ] && [ "$PORT" != "69" ]; then
       echo "NOTA: modo tftp llamada con PORT=$PORT (esperado 69/UDP)" >&2
     fi

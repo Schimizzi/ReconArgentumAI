@@ -4,7 +4,7 @@
 
 Es el **runner maestro de la fase de escaneo**: recorre toda la lista de objetivos autorizados
 (`authorized_targets`) de la configuración y, **uno por uno**, llama a `run_target.sh` (que
-escanea cada IP con sus 8 pasos).
+escanea cada IP con sus 10 pasos).
 
 Entre un objetivo y el siguiente espera un tiempo (por defecto **5 minutos**, configurable) para
 no hacer ruido en la red y respetar el sigilo.

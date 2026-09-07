@@ -27,6 +27,12 @@ python3 scripts/make_vuln_report.py --project CLIENTE --target 10.155.10.15
 
 # Simular sin generar nada
 python3 scripts/make_vuln_report.py --project CLIENTE --dry-run
+
+# No acumular corridas (no escribe si ya existe)
+python3 scripts/make_vuln_report.py --project CLIENTE --no-clobber
+
+# Borrar el historial del objetivo y arrancar de cero
+python3 scripts/make_vuln_report.py --project CLIENTE --target 10.155.10.15 --reset
 ```
 
 ## 📥 Entrada / 📤 Salida
@@ -43,3 +49,8 @@ python3 scripts/make_vuln_report.py --project CLIENTE --dry-run
 - **Deduplicación:** si dos fuentes reportan lo mismo, aparece una vez con la fuente más completa.
 - **Ofuscación:** contraseñas/tokens se escriben como `***` en el informe (la evidencia original
   no se modifica).
+- **Acumula corridas:** cada vez que se ejecuta con hallazgos, el informe **se concatena** con
+  la corrida anterior y marca la división con el horario (`# ===== corrida ... =====` en el `.txt`,
+  `Corrida del reporte: ...` en el `.doc`). No sobrescribe lo previo. Usá `--reset` para borrar
+  el historial de un objetivo y empezar de cero, o `--no-clobber` para no acumular.
+- Si un objetivo no tiene hallazgos, solo lo avisa (`⚠️`) y **no toca** los informes ya generados.

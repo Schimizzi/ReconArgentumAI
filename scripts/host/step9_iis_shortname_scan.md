@@ -1,4 +1,4 @@
-# iis_shortname_scan — IIS Short File Name Disclosure (8.3)
+# step9_iis_shortname_scan — IIS Short File Name Disclosure (8.3)
 
 Detección y enumeración de **IIS Short File Name Disclosure** (divulgación de
 nombres cortos 8.3 de Windows, también llamada *IIS tilde enumeration*,
@@ -87,31 +87,55 @@ Tomcat) presentan `Microsoft-IIS`.
 
 ## Uso
 
+Hoy vive en `scripts/host/` y tiene dos modos:
+
+- **Modo manual** (bajo demanda sobre `CLIENTE/`): descubre IIS desde
+  `outputs/gobuster_evidence.txt`, tal como siempre.
+- **Modo pipeline** (`--ev-dir`): lo invoca `run_target.sh` en el **Step 9**, apuntando directo
+  a `evidence/<IP>/`. En el pipeline **no existe** `gobuster_evidence.txt` todavía (eso lo
+  genera `check_gobuster_urls.sh` a mano); por eso el descubrimiento IIS usa el campo
+  `webserver` de `httpx.json` (el Step 2) y los directorios de `gobuster_<port>.txt` (Step 7).
+
+### Modo manual (bajo demanda, como siempre)
+
 ```bash
 # todos los targets con IIS del CLIENTE/
-scripts/iis_shortname_scan.py
+python3 scripts/host/step9_iis_shortname_scan.py
 
 # un target concreto
-scripts/iis_shortname_scan.py --target 10.155.10.15
+python3 scripts/host/step9_iis_shortname_scan.py --target 10.155.10.15
 
 # solo el puerto 81 de un target
-scripts/iis_shortname_scan.py --target 10.156.244.42 --port 81
+python3 scripts/host/step9_iis_shortname_scan.py --target 10.156.244.42 --port 81
 
 # sin enumerar, solo confirmar vulnerabilidad
-scripts/iis_shortname_scan.py --isvuln
+python3 scripts/host/step9_iis_shortname_scan.py --isvuln
 
 # URLs manuales (una por línea)
-scripts/iis_shortname_scan.py --urls mis_urls.txt
+python3 scripts/host/step9_iis_shortname_scan.py --urls mis_urls.txt
 
 # ver qué URLs se escanearían, sin tráfico
-scripts/iis_shortname_scan.py --dry-run
+python3 scripts/host/step9_iis_shortname_scan.py --dry-run
 ```
+
+### Modo pipeline (lo llama el Step 9 de `run_target.sh`)
+
+```bash
+# Apunta directo a un dir de evidencia del pipeline (evidence/<IP>). Descubre las
+# URLs IIS desde httpx.json y escribe las salidas en el mismo <DIR>.
+python3 scripts/host/step9_iis_shortname_scan.py --ev-dir evidence/10.155.10.15 --dry-run
+python3 scripts/host/step9_iis_shortname_scan.py --ev-dir evidence/10.155.10.15 --target 10.155.10.15
+```
+
+> En modo `--ev-dir` el resumen global (`iis_shortname_summary.txt`) queda **dentro** del
+> mismo `<DIR>` de evidencia (self-contained en `evidence/<IP>/`), no en `CLIENTE/`.
 
 ### Flags
 
 | Flag | Descripción |
 |---|---|
 | `-p, --proyecto DIR` | raíz con `CLIENTE/<IP>_*/outputs` (default `CLIENTE`) |
+| `--ev-dir DIR` | MODO PIPELINE: dir de evidencia directo (ej. `evidence/<IP>`); descubre IIS desde `httpx.json` |
 | `-o, --out DIR` | resumen global y salidas de targets sin carpeta en CLIENTE (default `CLIENTE/iis_shortname_checks`) |
 | `-t, --target IP` | solo ese target |
 | `--port N` | solo ese puerto del sitio IIS |

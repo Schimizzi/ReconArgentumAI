@@ -42,12 +42,12 @@ Salidas por target en CLIENTE/<IP>_*/outputs/ (junto a los outputs de gobuster):
 Resumen global: CLIENTE/iis_shortname_checks/iis_shortname_summary.txt (default).
 
 Uso:
-  scripts/iis_shortname_scan.py                       # todos los targets con IIS
-  scripts/iis_shortname_scan.py --target 10.155.10.15
-  scripts/iis_shortname_scan.py --target 10.156.244.42 --port 81
-  scripts/iis_shortname_scan.py --urls mis_urls.txt
-  scripts/iis_shortname_scan.py --isvuln              # solo deteccion
-  scripts/iis_shortname_scan.py --dry-run             # lista URLs sin trafico
+  scripts/host/step9_iis_shortname_scan.py              # todos los targets con IIS
+  scripts/host/step9_iis_shortname_scan.py --target 10.155.10.15
+  scripts/host/step9_iis_shortname_scan.py --target 10.156.244.42 --port 81
+  scripts/host/step9_iis_shortname_scan.py --urls mis_urls.txt
+  scripts/host/step9_iis_shortname_scan.py --isvuln     # solo deteccion
+  scripts/host/step9_iis_shortname_scan.py --dry-run    # lista URLs sin trafico
 """
 
 import argparse
@@ -356,6 +356,65 @@ def build_urls(sites, target=None, port=None, only_root=False):
     return out
 
 
+def discover_iis_from_httpx(ev_dir):
+    """Descubrimiento IIS en MODO PIPELINE (--ev-dir).
+
+    En el pipeline la evidencia vive en evidence/<IP>/ directo (sin subcarpeta
+    outputs/): httpx.json (NDJSON de httpx-pd) y gobuster_<port>.txt. NO existe
+    gobuster_evidence.txt (eso lo genera check_gobuster_urls.sh a mano sobre
+    CLIENTE/). Por eso se toma la firma 'IIS'/'Microsoft-IIS' del campo
+    'webserver' de httpx.json, y los directorios de gobuster_<port>.txt.
+
+    Devuelve (sites, tgt_dirs) en el MISMO formato que discover_iis_sites(),
+    con tgt_dirs[ip] = <ev_dir> (las salidas del scan van al propio dir de
+    evidencia, para que organize_project.py las consolide después).
+    """
+    sites = {}
+    tgt_dirs = {}
+    hp = os.path.join(ev_dir, "httpx.json")
+    if not os.path.exists(hp):
+        return sites, tgt_dirs
+    ip = os.path.basename(ev_dir).split("_")[0]
+    port_urls = {}
+    with open(hp, encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                o = json.loads(line)
+            except ValueError:
+                continue
+            ws = (o.get("webserver") or "")
+            if "iis" not in ws.lower() or o.get("failed"):
+                continue
+            u = o.get("url") or ""
+            p = urllib.parse.urlparse(u)
+            if not p.scheme:
+                continue
+            port = p.port or (443 if p.scheme == "https" else 80)
+            base = "%s://%s:%s" % (p.scheme, p.hostname, port)
+            port_urls.setdefault(port, {"url": base, "dirs": []})
+    if port_urls:
+        tgt_dirs[ip] = ev_dir
+        for g in sorted(glob.glob(os.path.join(ev_dir, "gobuster_*.txt"))):
+            m = re.search(r"gobuster_(\d+)\.txt$", os.path.basename(g))
+            if not m:
+                continue
+            port = int(m.group(1))
+            if port not in port_urls:
+                continue
+            with open(g, encoding="utf-8", errors="replace") as fh:
+                for line in fh:
+                    dm = re.match(r"^(\S+)\s+\(Status: (\d+)\)", line)
+                    if dm and int(dm.group(2)) in DIR_STATUS:
+                        path = dm.group(1).strip("/")
+                        if path:
+                            port_urls[port]["dirs"].append(path)
+        sites[ip] = port_urls
+    return sites, tgt_dirs
+
+
 def read_urls_file(path):
     """Lee una lista plana de URLs (una por linea, '#' para comentarios)."""
     urls = []
@@ -484,13 +543,20 @@ def write_summary(out_dir, rows, total_urls):
 # main
 # ======================================================================
 def main():
-    WORKSPACE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # Este script vive en scripts/host/ (a 3 niveles de la raíz del repo).
+    WORKSPACE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     ap = argparse.ArgumentParser(
         prog="iis_shortname_scan",
         description="Escaneo de IIS Short File Name Disclosure (8.3 / ~1) "
                     "sobre las URLs Microsoft-IIS de los outputs de gobuster.")
     ap.add_argument("--proyecto", "-p", default=os.path.join(WORKSPACE, "CLIENTE"),
                     help="directorio raiz con CLIENTE/<IP>_*/outputs (default CLIENTE)")
+    ap.add_argument("--ev-dir", default="",
+                    help="MODO PIPELINE: apuntar directo a un dir de evidencia "
+                         "(ej. evidence/<IP>) que contenga httpx.json y "
+                         "gobuster_<port>.txt. El descubrimiento IIS usa el campo "
+                         "'webserver' de httpx.json (no gobuster_evidence.txt). "
+                         "Las salidas se escriben en ese mismo dir.")
     ap.add_argument("--out", "-o", default=os.path.join(WORKSPACE, "CLIENTE",
                                                         "iis_shortname_checks"),
                     help="directorio para el resumen global y salidas de targets "
@@ -538,6 +604,13 @@ def main():
         urls = read_urls_file(args.urls)
         targets = group_urls_by_host(urls)
         tgt_dirs = {}
+    elif args.ev_dir:
+        # MODO PIPELINE: evidencia directa en evidence/<IP> (httpx.json + gobuster_*.txt)
+        sites, tgt_dirs = discover_iis_from_httpx(args.ev_dir)
+        if args.target and args.target not in sites:
+            print("[!] %s: sin firma Microsoft-IIS en httpx.json (se omite)." % args.target)
+        targets = build_urls(sites, target=args.target, port=args.port,
+                             only_root=args.only_root)
     else:
         sites, tgt_dirs = discover_iis_sites(args.proyecto)
         if args.target and args.target not in sites:
@@ -645,9 +718,13 @@ def main():
             if args.delay > 0:
                 time.sleep(args.delay)
         estados_targets[ip] = estados
-        # salidas por target: CLIENTE/<IP>_*/outputs/ (o fallback args.out/<ip>)
-        td = tgt_dirs.get(ip)
-        dest = os.path.join(td, "outputs") if td else os.path.join(args.out, ip)
+        # salidas por target: CLIENTE/<IP>_*/outputs/ (o fallback args.out/<ip>).
+        # En modo --ev-dir las salidas van DIRECTAS al dir de evidencia.
+        if args.ev_dir:
+            dest = args.ev_dir
+        else:
+            td = tgt_dirs.get(ip)
+            dest = os.path.join(td, "outputs") if td else os.path.join(args.out, ip)
         ev_txt, nfind, overwritten = write_target_outputs(
             ip, dest, results, targets[ip], estados, args.force)
         total_urls += len(targets[ip])
@@ -661,7 +738,10 @@ def main():
                n_incompleto, n_no_vuln, n_sin_conexion, n_short, nfind,
                ev_txt, overwritten))
 
-    summary = write_summary(args.out, rows, total_urls)
+    # En modo --ev-dir el resumen queda DENTRO del dir de evidencia (self-contained
+    # en evidence/<IP>/); en modo manual (proyecto CLIENTE) va a args.out.
+    summary = write_summary(args.out if not args.ev_dir else args.ev_dir,
+                            rows, total_urls)
     print("OK resumen -> %s" % summary)
     return 0
 

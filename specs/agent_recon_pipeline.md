@@ -12,22 +12,30 @@
 - `config/approved_commands.md` con los comandos `APROBADO` (o `SALTADO`) por el usuario para este target.
 - Help files consultados: `tools/*_help.md` (flags verificados localmente).
 
-## 0bis. Modos de ejecución (arquitectura híbrida)
+## 0bis. Modos de ejecución (arquitectura híbrida + Agente 1 automático)
 
-| Modo | Cuándo | Lanzador | Nmap | Binarios |
+| Modo | Binario | Lanzador | Nmap | Binarios |
 |---|---|---|---|---|
-| **DOCKER** | targets EXTERNOS (Internet) | `run_docker.sh` → `docker compose run --rm pentest` | `-sS` (raw sockets, requiere caps) | dentro del contenedor Kali; scripts en `scripts/` |
-| **HOST** | LAN local (macOS) | `run_host.sh` | **`-sT`** (TCP Connect; no requiere root) | directo en el host; scripts en `scripts/host/` |
+| **DOCKER** | targets EXTERNOS (Internet) o VM Kali con Docker | `run_docker.sh --auto` (sin LLM) / `run_docker.sh` (Orchestrator) | `-sS` (root; contenedor corre como root) | dentro del contenedor Kali; scripts en `scripts/host/` |
+| **HOST** | LAN local (macOS) o VM Kali sin Docker | `run_host.sh` / `bash scripts/host/run_fase1_run3.sh` | **`-sT`** si no root, **`-sS`** si root (autodetectado) | directo en el host; scripts en `scripts/host/` |
 
-- ⚠️ **Docker Desktop (macOS) NO ve la LAN local del host**: ni `-sS` (raw sockets emulados)
-  ni `-sT` (NAT/gVisor) propagan bien el tráfico → para escanear `192.168.8.0/24` usar SIEMPRE **MODO HOST**.
-- Ambos modos comparten el mismo DAG (8 steps, 7 tools), variables de `config/stealth.yaml`,
+> 🤖 **Agente 1 automático SIN LLM (2026-09-07):** ambos modos comparten el **mismo** set
+> `scripts/host/` y el **mismo runner maestro** `scripts/host/run_fase1_run3.sh`, que recorre
+> `authorized_targets` de `scope.json` y delega cada IP a `run_target.sh`. No hace falta LLM para
+> la Fase 1: los scripts deciden status `success/failed/skipped_*`, retry 1x y delays desde
+> `config/stealth.yaml`.
+
+- ⚠️ **Docker Desktop (macOS) NO accede la LAN local del host**: ni `-sS` (raw sockets emulados)
+  ni `-sT` (NAT/gRPC) propagan bien el tráfico → para escanear `192.168.8.0/24` usar SIEMPRE **MODO HOST**.
+- Ambos modos comparten el mismo DAG (10 steps, 9 tools), `config/stealth.yaml`,
   workaround `-oJ` (ver Step 1) y el sub-schema de evidencia (`evidence/<target>/…`, `manifest.json`).
-- Modo HOST: en `scripts/host/*.sh` cada step resuelve `{{...}}` de stealth.yaml con los valores
-  actuales (documentados en el propio script). La wordlist de Gobuster en HOST se descarga
-  (cache en `tools/seclists_common.txt`); en DOCKER usa `/opt/SecLists/.../common.txt`.
+- **Wordlists portables** (2026-09-07): `step7_gobuster.sh` y `preflight_run.sh` resuelven las
+  SecLists probando `/opt/SecLists/...` → `$HOME/Documents/SecLists/...` → `tools/seclists_common.txt`
+  (cache web local del repo). Funciona igual en host macOS, VM Kali y contenedor.
+- **Scan type autodetectado** (2026-09-07): `step1_nmap_ports.sh` y `step3_nmap_detailed.sh` usan
+  `-sS` cuando `EUID == 0` (root: VM Kali / contenedor) y `-sT` en caso contrario (host macOS sin root).
 
-## 1. DAG lineal — 8 steps, 7 herramientas
+## 1. DAG lineal — 10 steps, 9 herramientas
 
 | Step | Herramienta | Input | Output en `evidence/<target>/` | Post-proceso |
 |---|---|---|---|---|
@@ -39,8 +47,10 @@
 | 6 | WhatWeb | `web_endpoints.txt` — **solo si hay web** | `whatweb.json` (o `.txt`) | — |
 | 7 | Gobuster/Dirsearch | **multi-modo** — `dir` (si hay web) + `dns` (si target es dominio) + `tftp` (si UDP 69 abierto) | `gobuster_<port>.txt`, `gobuster_dns.txt`, `gobuster_tftp.txt` | — |
 | 8 | SSLyze | **puertos con túnel SSL/TLS** detectados por Nmap (no solo 443/8443) | `sslyze_<port>.json` (o `.txt`) | — |
+| 9 | IIS Shortname (8.3) | **solo si hay web** + firma `Microsoft-IIS` en `httpx.json` (`webserver`) | `iis_shortname_evidence.txt/.json`, `iis_scan_urls.txt`, `iis_shortname_commands_outputs.txt` | — |
+| 10 | SMB Enum (`step10_smbclient_enum.sh`) | **solo si TCP 139/445 abierto** (`open_ports.txt` o `nmap_detailed.xml`) | `smbclient_shares.txt`, `smbclient_<share>.txt` | — |
 
-Orden SIEMPRE lineal `1→2→3→…→8`, sin paralelismo (R3 del master_prompt).
+Orden SIEMPRE lineal `1→2→3→…→10`, sin paralelismo (R3 del master_prompt).
 
 ## 2. Reglas transversales (aplican a TODOS los steps)
 
@@ -248,7 +258,48 @@ sslyze <TARGET>:<TLS_PORT> \
 - Fallback si `--json_out` fallara: volcar stdout completo a `sslyze_<port>.txt` (sin `--quiet`).
 - Si no hay puertos TLS detectables → manifest `skipped_no_tls`.
 
-## 4. Service-Based Routing (Optimización Multiprotocolo — 2026-08-31)
+### Step 9 — IIS Shortname 8.3 (input: `web_on` + firma IIS en `httpx.json`)
+
+> **Integrado 2026-09-07.** El Step 9 solo se ejecuta si hay endpoints web (**`web_on`**) y el
+> `httpx.json` del Step 2 reporta la firma `Microsoft-IIS`/`IIS` en el campo `webserver`. En el
+> pipeline **no existe** `gobuster_evidence.txt` todavía (eso lo genera `check_gobuster_urls.sh`
+> a mano sobre `CLIENTE/`); por eso el descubrimiento IIS en modo pipeline usa `httpx.json` y
+> los directorios de `gobuster_<port>.txt` de `evidence/<target>/`.
+>
+> Si no hay web **o** el servidor no es IIS → `skipped_no_iis` y NO se envía ningún request de
+> tilde enumeration.
+
+```bash
+python3 scripts/host/step9_iis_shortname_scan.py --ev-dir <WORKSPACE>/evidence/<target> --target <TARGET>
+```
+
+- La firma IIS se toma del campo `webserver` de `httpx.json` (`Microsoft-IIS/8.5`, `Microsoft-IIS/10.0`,
+  etc.); servers como `gSOAP/2.8`, `Apache-Coyote/1.1` o `nginx` **no** disparan el Step 9.
+- Evidencia en `evidence/<target>/`: `iis_shortname_evidence.txt`/`.json` (consumido por el Agente 6),
+  `iis_scan_urls.txt` y `iis_shortname_commands_outputs.txt`.
+- `--force` no es necesario aquí (el script conserva evidencia previa salvo que sea SIN_CONEXION total;
+  en el pipeline las corridas son frescas sobre el ev-dir del target).
+- El `httpx.json` puede no incluir el campo `webserver`, o el server puede omitir el header → en
+  ese caso Step 9 queda `skipped_no_iis` (no se infiere IIS sin confirmación).
+
+### Step 10 — SMB Enum `step10_smbclient_enum.sh` (input: puertos 139/445)
+
+> **Service-Based Router (igual que Nuclei):** el Step 10 solo se ejecuta si TCP 139 o 445 está
+> abierto, decidido desde `open_ports.txt` (Step 1) y confirmado con `nmap_detailed.xml` (Step 3).
+> La enumeración es **solo lectura** (null session `-N`), nunca monta ni escribe en el remoto (R2).
+
+```bash
+bash scripts/host/step10_smbclient_enum.sh --ev-dir <WORKSPACE>/evidence/<target> --force --no-ping-check
+```
+
+- `--force`: el pipeline regenera evidencia en cada corrida (al contrario del no-clobber manual).
+- `--no-ping-check`: el target ya respondió en los Steps 1-3 de la misma corrida (no se duplica
+  el gate ICMP).
+- Evidencia en `evidence/<target>/`: `smbclient_shares.txt` + `smbclient_<share>.txt` (solo si
+  login anónimo o shares accesibles; si no, se elimina — ruido sin hallazgo).
+- Si no hay 139/445 → `skipped_no_smb` y no se genera tráfico hacia el target.
+
+## 4. Service-Based Routing (Optimización — 2026-08-31)
 
 > Reemplaza el concepto rígido de "bifurcación no-web". El pipeline decide **por step** según
 > los servicios detectados (Service-Based Routing), NO aplana los steps 4-8 ante la ausencia
@@ -266,6 +317,8 @@ Tras el post-proceso del Step 2 y el Step 3:
 | 7 | Gobuster (dns) | target es un **dominio** (no IP cruda) | `skipped_no_domain` |
 | 7 | Gobuster (tftp) | **puerto 69/UDP abierto** (probe UDP aprobado) | `skipped_no_tftp` |
 | 8 | SSLyze | ≥1 puerto con túnel SSL/TLS (del Step 3) | `skipped_no_tls` |
+| 9 | IIS Shortname | `web_on` (hay web) **y** `httpx.json.webserver` contiene `Microsoft-IIS`/`IIS` | `skipped_no_iis` |
+| 10 | SMB Enum | TCP 139 ó 445 abierto (`open_ports.txt` o `nmap_detailed.xml`) | `skipped_no_smb` |
 
 - **El pipeline continúa sano ante cualquier `skipped_*`**: no es un error, no aborta el target;
   los hallazgos de servicios no-web del Step 3 y del Step 4 siguen al Agente 3.
@@ -297,12 +350,14 @@ Esquema exacto (igual a design.md):
     {"step": 5, "tool": "nikto", "status": "skipped_no_web", "output": []},
     {"step": 6, "tool": "whatweb", "status": "skipped_no_web", "output": []},
     {"step": 7, "tool": "gobuster", "status": "skipped_no_web", "output": []},
-    {"step": 8, "tool": "sslyze", "status": "skipped_no_tls", "output": []}
+    {"step": 8, "tool": "sslyze", "status": "skipped_no_tls", "output": []},
+    {"step": 9, "tool": "iis_shortname", "status": "skipped_no_iis", "output": []},
+    {"step": 10, "tool": "smbclient_enum", "status": "skipped_no_smb", "output": []}
   ],
   "out_of_scope_findings": [],
   "errors": []
 }
 ```
 
-- Estados válidos de `status`: `success` | `failed` | `skipped` (WhatWeb SALTADO) | `skipped_no_ports` (Nuclei sin puertos) | `skipped_no_web` (Nikto/WhatWeb/Gobuster-dir sin web) | `skipped_no_domain` | `skipped_no_tftp` | `skipped_no_tls`. `tools_executed` contiene SIEMPRE los 8 steps (8 entradas), inclusive los saltados.
+- Estados válidos de `status`: `success` | `failed` | `skipped` (WhatWeb SALTADO) | `skipped_no_ports` (Nuclei sin puertos) | `skipped_no_web` (Nikto/WhatWeb/Gobuster-dir sin web) | `skipped_no_domain` | `skipped_no_tftp` | `skipped_no_tls` | `skipped_no_iis` (Step 9 sin web o sin firma Microsoft-IIS) | `skipped_no_smb` (Step 10 sin 139/445 abiertos). `tools_executed` contiene SIEMPRE los 10 steps (10 entradas), inclusive los saltados.
 - Se genera al terminar el pipeline del target (o al abandonarlo por `incomplete`).
