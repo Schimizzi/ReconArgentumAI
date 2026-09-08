@@ -9,7 +9,7 @@ lista de `IP:PUERTO` abiertos.
 Ese archivo es el "menú" que los pasos siguientes (HTTPX, Nuclei, Nmap detallado…) usan para
 saber contra qué servicios continuar.
 
-> Hay una versión gemela para el entorno Docker en `scripts/post_step1_open_ports.sh`.
+> Este es el **único** post-proceso del paso 1 (script unificado: host, VM Kali y contenedor Docker).
 
 ## ⏱️ ¿Cuándo se usa?
 

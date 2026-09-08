@@ -87,7 +87,7 @@ run_retry() {
 }
 
 # ---- Step 1: Nmap port scan --------------------------------------------------
-log "Step 1/10 - Nmap port scan --top-ports 1000 (-sT, -Pn -n, timing/rate default de Nmap) sobre $TARGET"
+log "Step 1/10 - Nmap port scan -p clienteP (-sT, -Pn -n, timing/rate default de Nmap) sobre $TARGET"
 R1=$(run_retry nmap_ports bash "$WS/scripts/host/step1_nmap_ports.sh" "$TARGET")
 
 # ---- Post-proceso Step 1: open_ports.txt -------------------------------------
@@ -100,14 +100,14 @@ jq -r '(.scan | keys[]) as $t | .scan[$t].tcp | to_entries[] |
 
 NPORTS=$(wc -l < "$EVID/open_ports.txt" 2>/dev/null || echo 0)
 if [ "$NPORTS" -eq 0 ]; then
-  log "ℹ️  Sin puertos abiertos (--top-ports 1000) → target incomplete."
+  log "ℹ️  Sin puertos abiertos (clienteP) → target incomplete."
   cat > "$EVID/manifest.json" <<EOF
 {
   "target": "$TARGET",
   "target_id": "$TARGET_ID",
   "started_at": "$STARTED",
   "status": "incomplete",
-  "notes": "Sin puertos abiertos (--top-ports 1000 aprobado, Step 1). Steps 2-10 skipped (Service-Based Routing).",
+  "notes": "Sin puertos abiertos (clienteP autorizado, Step 1). Steps 2-10 skipped (Service-Based Routing).",
   "tools_executed": [
     {"step": 1, "tool": "nmap_ports", "status": "$R1", "output": ["nmap_ports.json", "nmap_ports.xml", "nmap_ports.txt", "nmap_ports.gnmap", "open_ports.txt"]},
     {"step": 2, "tool": "httpx", "status": "skipped_no_ports", "output": []},
@@ -135,9 +135,11 @@ R2=$(run_retry httpx bash "$WS/scripts/host/step2_httpx.sh" "$TARGET")
 
 # post-proceso: web_endpoints.txt desde httpx.json
 if [ -s "$EVID/httpx.json" ]; then
-  jq -r '.url // empty' "$EVID/httpx.json" 2>/dev/null | grep -E '^https?://' > "$EVID/web_endpoints.txt" || true
+  # sort -u (FIX KALI 2026-09-07): dedupe de URLs repetidas por redirects 80→443.
+  jq -r '.url // empty' "$EVID/httpx.json" 2>/dev/null | grep -E '^https?://' | sort -u > "$EVID/web_endpoints.txt" || true
 fi
-WURLS=$(wc -l < "$EVID/web_endpoints.txt" 2>/dev/null || echo 0)
+WURLS=0
+if [ -f "$EVID/web_endpoints.txt" ]; then WURLS=$(wc -l < "$EVID/web_endpoints.txt" 2>/dev/null || echo 0); fi
 log "✅ Endpoints web: ${WURLS}"
 sleep "$DELAY_TOOLS"
 
@@ -190,8 +192,20 @@ if web_on; then
   done < "$EVID/web_endpoints.txt"
   sleep "$DELAY_TOOLS"
 
-  log "Step 6/10 — WhatWeb: SALTADO por usuario (Fase 0 DREAMCO-2026; no instalado)"
-  STATUS6=skipped   # SALTADO por usuario (approved_commands.md); no se ejecuta
+  # WhatWeb — auto-detección (FIX KALI 2026-09-07): la razón original del skip (Fase 0)
+  # era "no instalado", pero en Kali viene instalado por defecto (/usr/bin/whatweb) y el
+  # repo trae tools/WhatWeb/whatweb. Si el binario existe en PATH o en el repo → corre
+  # (genera whatweb.json); si no existe → skipped (mantiene la decisión Fase 0).
+  log "Step 6/10 — WhatWeb (auto-detección: binario en PATH o tools/WhatWeb/whatweb)"
+  WWBIN="$(command -v whatweb || echo "$WS/tools/WhatWeb/whatweb")"
+  if [ -x "$WWBIN" ]; then
+    R6=$(run_retry whatweb bash "$WS/scripts/host/step6_whatweb.sh" "$TARGET")
+    STATUS6=success; [ "$R6" = FAIL ] && STATUS6=failed
+    log "  → whatweb: $R6 (binario: $WWBIN)"
+  else
+    log "  → whatweb no encontrado (ni PATH ni tools/WhatWeb) → skipped"
+    STATUS6=skipped
+  fi
   sleep "$DELAY_TOOLS"
 else
   STATUS5=skipped_no_web

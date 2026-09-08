@@ -39,7 +39,13 @@ fi
 sanity_ok() {
   docker compose run --rm -T pentest bash -c \
     'for t in nmap httpx-pd nuclei nikto whatweb gobuster sslyze smbclient ping jq; do
-       command -v $t >/dev/null 2>&1 && echo "  OK $t -> $(command -v $t)" || echo "  FALTA $t"; done'
+       command -v $t >/dev/null 2>&1 && echo "  OK $t -> $(command -v $t)" || echo "  FALTA $t"; done
+     # httpx de probe: acepta httpx-pd (Docker/macOS) o httpx-toolkit (Kali apt)
+     if command -v httpx-pd >/dev/null 2>&1 || command -v httpx-toolkit >/dev/null 2>&1; then
+       echo "  OK httpx-probe -> $(command -v httpx-pd 2>/dev/null || command -v httpx-toolkit)"
+     else
+       echo "  FALTA httpx-pd/httpx-toolkit (probe ProjectDiscovery)"; exit 1
+     fi'
 }
 echo ""
 echo "--- 🔍 Sanity check (9 tools + jq) ---"

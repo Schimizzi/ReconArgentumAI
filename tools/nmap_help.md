@@ -31,7 +31,7 @@
 - `-sA` ACK scan (mapeo de firewalls).
 - `-sU` UDP scan (lento; cuidadoso con stealth).
 - `-p <range>` Rango de puertos: `-p22`, `-p1-65535`, `-p U:53,T:80-88`, `-p top-1000`.
-- `--top-ports <n>` Escanear los n puertos más comunes. Fase 0: `--top-ports 1000`.
+- `--top-ports <n>` Escanear los n puertos más comunes. Step 1 ACTUAL: usa la lista `-p <clienteP>` de `config/stealth.yaml` (98 puertos del cliente) en lugar de `--top-ports 1000` (baseline Fase 0).
 - `-F` Fast mode (menos puertos que el default).
 - `--exclude-ports <range>` Excluir puertos.
 - `--open` Mostrar SOLO puertos abiertos (reduce ruido de output).
@@ -67,7 +67,7 @@
 ```bash
 # Step 1 — MODO DOCKER (targets externos): SYN scan
 nmap -sS -T{{nmap_timing_template}} --max-rate {{nmap_max_rate}} \
-  --top-ports 1000 --open -Pn \
+  -p <clienteP> --open -Pn \
   -oX /workspace/evidence/<target>/nmap_ports.xml \
   -oN /workspace/evidence/<target>/nmap_ports.txt \
   -oG /workspace/evidence/<target>/nmap_ports.gnmap \
@@ -75,7 +75,7 @@ nmap -sS -T{{nmap_timing_template}} --max-rate {{nmap_max_rate}} \
 
 # Step 1 — MODO HOST (LAN local): TCP Connect scan
 nmap -sT -T{{nmap_timing_template}} --max-rate {{nmap_max_rate}} \
-  --top-ports 1000 --open -Pn \
+  -p <clienteP> --open -Pn \
   -oX <WORKSPACE>/evidence/<target>/nmap_ports.xml \
   -oN <WORKSPACE>/evidence/<target>/nmap_ports.txt \
   -oG <WORKSPACE>/evidence/<target>/nmap_ports.gnmap \

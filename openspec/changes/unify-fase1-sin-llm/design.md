@@ -38,6 +38,8 @@ El pipeline de recon (Fase 1) ya está materializado en scripts portables en `sc
 
 
 
+- **Diagnóstico del binario de HTTPX por `command -v` (prioridad `httpx-pd` → `httpx`) en lugar de hardcodear `httpx-pd`**: `step2_httpx.sh`, `preflight_run.sh` y `run_host.sh` resuelven el binario de probe con `command -v httpx-pd` como primera opción y `command -v httpx` como segunda (ambos ProjectDiscovery). Alternativa considerada: crear un symlink `httpx-pd` en Kali (1 comando) → descartada porque no queda registrada en el repo y asume que el `httpx` de Kali es el correcto; la resolución en código queda documentada y funciona en macOS y Kali.
+
 ## Risks / Trade-offs
 
 - [Imagen Docker mas grande por los paquetes nuevos] → Mitigación: paquetes apt pequeños; documentado en el Dockerfile.

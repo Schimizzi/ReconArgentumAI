@@ -38,5 +38,8 @@ bash scripts/host/step7_gobuster.sh 10.155.10.15 http://10.155.10.15:8082 8082 d
 
 - Threads, timeouts y un **corte de tiempo máximo** salen de la configuración de sigilo
   (si un servidor no responde al diccionario completo, lo corta para no quedarse horas).
+- Salta la verificación del **certificado TLS** (opción `-k`): los equipos embebidos de la
+  LAN (Avaya IP Office, etc.) usan certificados autofirmados; sin `-k` Gobuster fallaba el
+  arranque y cada consulta se colgaba hasta el corte de tiempo (caso detectado en Kali).
 - Solo reporta respuestas 200/204/301/307/403 (lo que vale la pena anotar).
 - Si no hay sitios web ni dominio ni TFTP, el paso se marca como "saltado".

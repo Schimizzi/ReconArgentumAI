@@ -12,6 +12,7 @@ La Fase 1 (Agente 1 — Recon) ya está materializada en scripts (`scripts/host/
 - **Imagen Docker completada para el Agente 1 completo**: `Dockerfile` agrega `samba-client` (Step 10 SMB Enum) e `iputils-ping` (preflight + ping gate), y el sanity check del build verifica las **9 tools + jq**.
 - **Lanzador Docker sin LLM**: `run_docker.sh --auto` (Fase 1 completa, todos los targets) y `run_docker.sh --auto-target <IP>` ejecutan el Agente 1 dentro del contenedor sin LLM; soporta `--dry-run`, sanity check con rebuild automático UNA vez si la imagen es vieja`.`run_docker.sh` sin argumentos sigue mostrando las instrucciones del Orchestrator (LLM / manual).
 - **Docs/spec operativa**: `README.md`, `run_host.sh`, `scripts/host/step1_nmap_ports.md` y `specs/agent_recon_pipeline.md` documentan el modo automático y la unificación.
+- **Resolución dual del binario de probe HTTP (httpx-pd/httpx) (2026-09-07)**: `step2_httpx.sh`, `preflight_run.sh` y `run_host.sh` resuelven el binario de HTTPX con prioridad **`httpx-pd` → `httpx`** (ambos de ProjectDiscovery). En macOS/contenedor existe `httpx-pd`; en Kali nativo solo existe `httpx` (`/usr/bin/httpx`). La resolución evita usar el `httpx` cliente HTTP de Python (presente en el PATH de macOS) priorizando `httpx-pd`.
 
 ## Capabilities
 
@@ -25,7 +26,7 @@ La Fase 1 (Agente 1 — Recon) ya está materializada en scripts (`scripts/host/
 
 ## Impact
 
-- **Scripts** (modificados): `scripts/host/step1_nmap_ports.sh`, `scripts/host/step3_nmap_detailed.sh` (scan type autodetectado); `scripts/host/step7_gobuster.sh`, `scripts/host/preflight_run.sh` (wordlists portables + verificación de `smbclient`/`ping`).
+- **Scripts** (modificados): `scripts/host/step1_nmap_ports.sh`, `scripts/host/step3_nmap_detailed.sh` (scan type autodetectado); `scripts/host/step7_gobuster.sh`, `scripts/host/preflight_run.sh` (wordlists portables + verificación de `smbclient`/`ping`); `scripts/host/step2_httpx.sh`, `run_host.sh`, `preflight_run.sh` (resolución dual del binario de HTTPX: `httpx-pd` → `httpx`).
 - **Docker** (modificado): `Dockerfile` (samba-client, iputils-ping, sanity check 9 tools + jq); `run_docker.sh` (flags `--auto` / `--auto-target` / `--dry-run`, sanity con rebuild 1x)..
 - **Docs** (modificados): `README.md` (tabla de modos + Quick Start con Agente 1 automático sin LLM;; `run_host.sh` (instrucciones sin LLM;; `scripts/host/step1_nmap_ports.md` (autodetección;; `specs/agent_recon_pipeline.md` (§0bis: unificación, wordlists portables, scan type autodetectado).
 - **Specs OpenSpec**: delta en `openspec/specs/recon-pipeline/spec.md` (via este change;; no se toca `pipeline-orchestration` ni `reporting`.

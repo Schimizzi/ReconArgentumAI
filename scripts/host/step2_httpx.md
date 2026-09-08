@@ -29,4 +29,8 @@ bash scripts/host/step2_httpx.sh 10.155.10.15
 ## 🧠 Detalles importantes
 
 - Timeouts, reintentos y paralelismo salen de `config/stealth.yaml` (bajo ruido).
-- Usa el binario `httpx-pd` (ProjectDiscovery), no confundir con el comando `httpx` de Python.
+- Usa el binario de ProjectDiscovery (`httpx-toolkit` en Kali, `httpx-pd` en macOS), no
+  confundir con el comando `httpx` de Python.
+- La lista `web_endpoints.txt` queda **deduplicada** (`sort -u`): cuando HTTPX sigue una
+  redirección (ej. del puerto 80 → 443) registra la misma dirección final varias veces; sin
+  deduplicar, los pasos 5 (Nikto) y 7 (Gobuster) escanean por duplicado.

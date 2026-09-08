@@ -10,7 +10,8 @@ ejecuta, en orden y respetando tiempos de espera, **los 10 pasos** del pipeline 
 3. **Nmap detallado** — qué programa y versión corre en cada puerto.
 4. **Nuclei** — busca vulnerabilidades conocidas.
 5. **Nikto** — escáner web complementario.
-6. **WhatWeb** — identifica tecnologías (está "saltado" por decisión del usuario en este proyecto).
+6. **WhatWeb** — identifica tecnologías (auto-detección desde 2026-09-07: corre si hay binario
+   en el PATH o en `tools/WhatWeb/`; si no, queda `skipped`).
 7. **Gobuster** — descubre carpetas ocultas.
 8. **SSLyze** — analiza seguridad de conexiones cifradas.
 9. **IIS Shortname (8.3)** — detecta divulgación de nombres cortos de IIS, **solo si** hay web

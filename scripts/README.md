@@ -1,6 +1,6 @@
 # 📂 Carpeta `scripts/` — Guía de entrada
 
-> **Para quién es esto:** si abriste esta carpeta y ves archivos como `step1_nmap_ports.sh` o
+> **Para quién es esto:** si abriste esta carpeta y ves archivos como `run_target.sh` o
 > `check_gobuster_urls.sh` y no sabés qué significan, esta guía te orienta en **lenguaje simple**.
 > **No hace falta saber programar.**
 
@@ -34,8 +34,6 @@ Cada `.md` que acompaña a un script explica, sin código:
 | `check_gobuster_urls.sh` | Revisa las URLs descubiertas buscando pistas de vulnerabilidades (headers, listados, credenciales, métodos peligrosos…) | [▶ check_gobuster_urls.md](check_gobuster_urls.md) |
 | `gobuster_urls.sh` | Arma la lista única de URLs a partir de los resultados de Gobuster | [▶ gobuster_urls.md](gobuster_urls.md) |
 | `install_host_tools.sh` | Instala las herramientas de pentest en la Mac (una sola vez) | [▶ install_host_tools.md](install_host_tools.md) |
-| `step1_nmap_ports.sh` | Primer escaneo: qué puertos están abiertos (versión Docker) | [▶ step1_nmap_ports.md](step1_nmap_ports.md) |
-| `post_step1_open_ports.sh` | Ordena la lista de puertos abiertos (versión Docker) | [▶ post_step1_open_ports.md](post_step1_open_ports.md) |
 | `xml_to_nmap_json.py` | Convierte el XML de Nmap a JSON | [▶ xml_to_nmap_json.md](xml_to_nmap_json.md) |
 | `cves_md.py` | Convierte la investigación CVE a un documento legible | [▶ cves_md.md](cves_md.md) |
 | `nvd_query.py` | Busca vulnerabilidades conocidas (CVE) por palabra clave | [▶ nvd_query.md](nvd_query.md) |
@@ -59,8 +57,8 @@ Cada `.md` que acompaña a un script explica, sin código:
 
 | Paso | Script | Qué herramienta usa | Documento |
 |---|---|---|---|
-| 1 | `step1_nmap_ports.sh` | Nmap — puertos abiertos | [▶ paso 1](host/step1_nmap_ports.md) |
-| 1 aux | `post_step1_open_ports.sh` | Nmap — ordena puertos abiertos | [▶ paso 1 aux](host/post_step1_open_ports.md) |
+| 1 | `host/step1_nmap_ports.sh` | Nmap — puertos abiertos | [▶ paso 1](host/step1_nmap_ports.md) |
+| 1 aux | `host/post_step1_open_ports.sh` | Nmap — ordena puertos abiertos | [▶ paso 1 aux](host/post_step1_open_ports.md) |
 | 2 | `step2_httpx.sh` | HTTPX — detecta sitios web | [▶ paso 2](host/step2_httpx.md) |
 | 3 | `step3_nmap_detailed.sh` | Nmap — versión de cada servicio | [▶ paso 3](host/step3_nmap_detailed.md) |
 | 4 | `step4_nuclei.sh` | Nuclei — vulnerabilidades conocidas | [▶ paso 4](host/step4_nuclei.md) |

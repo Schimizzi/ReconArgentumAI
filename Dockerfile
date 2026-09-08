@@ -41,7 +41,7 @@ WORKDIR /workspace
 
 # Sanity check: el build FALLA si falta alguna de las 9 tools del Agente 1 + jq
 RUN set -eux; \
-    command -v nmap; command -v httpx-pd; command -v nuclei; \
+    command -v nmap; (command -v httpx-pd || command -v httpx-toolkit); command -v nuclei; \
     command -v nikto; command -v whatweb; command -v gobuster; \
     command -v sslyze; command -v smbclient; \
     command -v ping; command -v jq
