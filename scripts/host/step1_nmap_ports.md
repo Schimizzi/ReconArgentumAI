@@ -25,7 +25,7 @@ bash scripts/host/step1_nmap_ports.sh 10.155.10.15
 
 ## 🧠 Detalles importantes
 
-- Revisa los **1000 puertos más comunes** y solo reporta los **abiertos**.
+- Escanea la **lista de puertos del cliente** definida en `config/stealth.yaml` (`clienteP`, reemplaza el antiguo `--top-ports 1000`); si no está definida, usa los **1000 puertos más comunes**. Solo reporta los **abiertos**.
 - No hace resolución de nombres DNS (más rápido y directo).
 - Retries y tiempos de espera salen de la configuración de sigilo (`config/stealth.yaml`), no
   están "a dedo".

@@ -12,9 +12,14 @@ Esa "huella" tecnológica sirve para saber contra qué buscar vulnerabilidades c
 
 Después del paso 2 (que dejó la lista de sitios web). 
 
-> ⚠️ **Importante:** en el proyecto, el usuario decidió en la Fase 0 **saltar este paso**
-> (WhatWeb queda `skipped`). Por eso en la práctica no se ejecuta, pero el script está listo
-> por si se quiere activar.
+> ℹ️ **Actualizado (2026-09-07):** el Step 6 pasó a **auto-detección**. Si existe un binario
+> WhatWeb (en el `PATH` —Kali lo trae instalado por defecto— o en `tools/WhatWeb/whatweb`) se
+> ejecuta y genera `whatweb.json`; si no existe ningún binario, queda `skipped` (mantiene la
+> decisión original de Fase 0: "saltar si no está instalado").
+>
+> ⚠️ Nota histórica: en una versión previa este paso estaba **siempre saltado** (decisión
+> Fase 0 / macOS donde se consideró "no instalado"); eso se cambió porque ocultaba un
+> fingerprint útil de tecnología en sistemas donde WhatWeb sí está disponible (Kali).
 
 ## ▶️ Cómo se usa
 

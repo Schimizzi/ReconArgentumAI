@@ -38,12 +38,12 @@ Fase 4  Consolidación (organize_project.py + Agente 6: resúmenes doc/txt por t
 | Fase | Agente | Rol | Salida clave | Modo de ejecución |
 |---|---|---|---|---|
 | **0** | 🎛️ **Orchestrator** | Calibra las 9 herramientas con el usuario (contexto de defensas, rango de puertos, wordlists) y registra **solo comandos aprobados**. | `config/approved_commands.md` | 🤖 **LLM / Manual** |
-| **1** | 🔍 **Recon Agent** | Ejecuta el DAG lineal 1→8 (Nmap → HTTPX → Nmap detallado → Nuclei → Nikto → WhatWeb → Gobuster → SSLyze) con delays de stealth, bifurcación **no-web** y retry 1x. | `evidence/<target>/` + `manifest.json` | 🧰 **Solo manual (script)** |
+| **1** | 🔍 **Recon Agent** | Ejecuta el DAG lineal 1→8 (Nmap → HTTPX → Nmap detallado → Nuclei → Nikto → WhatWeb → Gobuster → SSLyze) con delays de stealth, bifurcación **no-web** y retry 1x. | `evidence/<target>/` + `manifest.json` | 🧰 **Manual (script)** |
 | **1** | ⚠️ **Incidentes de run** (*) | Interpretar fallos de herramientas, hosts out-of-scope, VPN/WAF/tarpits, re-scans y decisiones de retry/cutoff. Los scripts no deciden: lo hace el operador. | `logs/` + manifests actualizados | 🤖 **LLM / Manual** |
 | **2** | 📋 **Agente 3 — Exploitation Planner** | Correlaciona evidencia por servicio con **protección de contexto** y redacta vectores accionables (pre-condiciones, pasos, PoC, detección, rollback). **Nunca ejecuta exploits.** | `plans/<target_id>_exploitation_plan.md` | 🧠 **Solo LLM** |
 | **2** | 🧬 **Agente 4 — CVE Researcher** | Consulta NVD / GitHub Advisories / Exploit-DB (timeout 30s/fuente), filtra CVSS ≥ 4.0 y rankea Top 3-5 por servicio con `rank_reason`. | `cve_research/<target_id>_cves.json` | 🧠 **Solo LLM** |
-| **3** | 📝 **Agente 5 — Reporter** | Consolida todo en informe dual + reportes individuales, con **ofuscación de credenciales** y validación JSON estricta. | `reports/final_report.*` + `reports/<target_id>_report.*` | 🧰 **Solo manual (script)** |
-| **4** | 📂 **Agente 6 — Consolidador de Hallazgos** | Independiente de `organize_project.py`: analiza SOLO `CLIENTE/<target>/outputs/` y extrae/reorganiza hallazgos de las herramientas en 2 entregables por target (`.doc` + `.txt`) con **cero invención**, deduplicación y ofuscación. Nueva evidencia copiada a `outputs/` se detecta en la siguiente corrida. | `CLIENTE/<target>/<target_id>_resumen_vulnerabilidades.doc` + `..._resumen_breve.txt` | 🧰 **Solo manual (script)** |
+| **3** | 📝 **Agente 5 — Reporter** | Consolida todo en informe dual + reportes individuales, con **ofuscación de credenciales** y validación JSON estricta. | `reports/final_report.*` + `reports/<target_id>_report.*` | 🧰 **Manual (script)** |
+| **4** | 📂 **Agente 6 — Consolidador de Hallazgos** | Independiente de `organize_project.py`: analiza SOLO `CLIENTE/<target>/outputs/` y extrae/reorganiza hallazgos de las herramientas en 2 entregables por target (`.doc` + `.txt`) con **cero invención**, deduplicación y ofuscación. Nueva evidencia copiada a `outputs/` se detecta en la siguiente corrida. | `CLIENTE/<target>/<target_id>_resumen_vulnerabilidades.doc` + `..._resumen_breve.txt` | 🧰 **Manual (script)** |
 
 > ### 🎮 ¿Cuándo interviene el LLM? (modos de ejecución)
 >
@@ -83,7 +83,7 @@ La arquitectura es **híbrida**: dos modos según el objetivo, con el mismo pipe
 | **Binarios** | Contenedor **Kali Linux** (imagen `recon-argento-stepai`) | Herramientas nativas del host (Homebrew / pipx / git clone) |
 | **Nmap** | `-sS` (SYN, requiere raw sockets / `NET_RAW`; contenedor corre como root) | `-sT` (TCP Connect, sin permisos root) — autodetectado |
 | **Scripts** | `scripts/host/` (mismo set unificado que Host/VM) | `scripts/host/` (en el host) |
-| **Wordlist** | `/opt/SecLists/...` → fallback `tools/seclists_common.txt` | `tools/seclists_common.txt` o `~/Documents/SecLists/...` |
+| **Wordlist** | `/opt/SecLists/...` → `/usr/share/seclists/...` → fallback `tools/seclists_common.txt` | `/usr/share/seclists/...` → `~/Documents/SecLists/...` → `tools/seclists_common.txt` |
 
 > ⚠️ **Importante:** Docker Desktop (macOS) **no ve la LAN local del host** (ni con `-sS` ni con `-sT`, por el backend de red emulado). Para escanear `192.168.x.x` usa **siempre el Modo Host**.
 >
@@ -120,6 +120,11 @@ bash scripts/host/run_target.sh 1.2.3.4  # solo esa IP
   gem install addressable -v 2.8.7
   ```
   > Instalación automatizada: `./scripts/install_host_tools.sh`
+- **⚠️ HTTPX (probe web, ProjectDiscovery) — el binario se resuelve con prioridad `httpx-toolkit` → `httpx-pd` → `httpx`:**
+  - **Kali Linux:** el binario PD se llama **`httpx-toolkit`** (Kali renombra los binarios PD que chocan con paquetes Python). Es el PRINCIPAL.
+  - **macOS / contenedor Docker:** el pipeline usa **`httpx-pd`** (en macOS vive en `go/bin/httpx-pd`; el Dockerfile lo crea como symlink `httpx-pd → httpx`).
+  - ⚠️ **No confundir:** el comando `httpx` del PATH (ej. el de Conda/Python `pip install httpx`) es el **cliente HTTP de Python** y **NO sirve** para probe. La resolución prioriza `httpx-toolkit`/`httpx-pd` justamente para evitar caer en él.
+  - Verificación: `preflight_run.sh` y `run_host.sh` aceptan `httpx-toolkit` **o** `httpx-pd` (y `httpx` solo si es PD real) y reportan cuál se usa.
 
 ---
 

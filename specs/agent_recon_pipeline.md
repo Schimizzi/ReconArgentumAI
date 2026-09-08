@@ -30,7 +30,7 @@
 - Ambos modos comparten el mismo DAG (10 steps, 9 tools), `config/stealth.yaml`,
   workaround `-oJ` (ver Step 1) y el sub-schema de evidencia (`evidence/<target>/…`, `manifest.json`).
 - **Wordlists portables** (2026-09-07): `step7_gobuster.sh` y `preflight_run.sh` resuelven las
-  SecLists probando `/opt/SecLists/...` → `$HOME/Documents/SecLists/...` → `tools/seclists_common.txt`
+  SecLists probando `/opt/SecLists/...` → `/usr/share/seclists/...` → `$HOME/Documents/SecLists/...` → `tools/seclists_common.txt`
   (cache web local del repo). Funciona igual en host macOS, VM Kali y contenedor.
 - **Scan type autodetectado** (2026-09-07): `step1_nmap_ports.sh` y `step3_nmap_detailed.sh` usan
   `-sS` cuando `EUID == 0` (root: VM Kali / contenedor) y `-sT` en caso contrario (host macOS sin root).
@@ -81,7 +81,7 @@ nmap -sS -T{{nmap_timing_template}} --max-rate {{nmap_max_rate}} \
 > `scripts/xml_to_nmap_json.py` (mismo sub-schema `.scan[IP].tcp[port].state`).
 > Detalle en `tools/nmap_help.md` y `config/approved_commands.md`.
 
-- Rango/puertos a escanear (`--top-ports 1000`): definido y aprobado en Fase 0.
+- Rango/puertos a escanear: lista `clienteP` de `config/stealth.yaml` (cliente actual; reemplaza `--top-ports 1000` aprobado en Fase 0).
 - Decoys (`-D {{decoy_ips}}`): solo si el usuario los autorizó.
 - **Post-proceso** — extraer puertos abiertos en `IP:PORT` por línea + derivar JSON:
 
@@ -96,12 +96,14 @@ jq -r '(.scan | keys[]) as $t | .scan[$t].tcp | to_entries[] |
 
 ### Step 2 — HTTPX probe web (input: `open_ports.txt`)
 
-> ⚠️ El pipeline corre dentro del contenedor Docker (Paso 2 del proyecto). El binario de
-> ProjectDiscovery se invoca como **`httpx-pd`** (symlink `httpx-pd → httpx` verificado; ambos
-> funcionan). NUNCA confundir con el cliente HTTP de Python `httpx` (vive en el host, no en el contenedor).
+> ⚠️ El binario de probe HTTP se resuelve con **prioridad `httpx-toolkit` → `httpx-pd` → `httpx`** (los 3 de ProjectDiscovery).
+> En **Kali Linux** el binario PD se llama **`httpx-toolkit`** (Kali renombra los binarios PD que chocan con paquetes Python) — es el PRINCIPAL.
+> En el contenedor Docker y macOS existe `httpx-pd` (symlink `httpx-pd → httpx` en Docker; binario en
+> `go/bin/httpx-pd` en macOS). El `httpx` del PATH (cliente HTTP de Python) NUNCA sirve para probe: la resolución
+> lo evita priorizando `httpx-toolkit`/`httpx-pd`, y solo lo acepta como fallback si realmente soporta `-l` (PD real).
 
 ```bash
-httpx-pd -l <WORKSPACE>/evidence/<target>/open_ports.txt \
+httpx-toolkit -l <WORKSPACE>/evidence/<target>/open_ports.txt \
   -o <WORKSPACE>/evidence/<target>/httpx.json \
   -json \
   -timeout {{httpx_timeout_seconds}} \
@@ -312,7 +314,7 @@ Tras el post-proceso del Step 2 y el Step 3:
 |---|---|---|---|
 | 4 | Nuclei | `open_ports.txt` no vacío (**SIEMPRE** si hay ≥1 puerto abierto) | `skipped_no_ports` |
 | 5 | Nikto | `web_endpoints.txt` no vacío | `skipped_no_web` |
-| 6 | WhatWeb | `web_endpoints.txt` no vacío (aprobado en Fase 0) | `skipped_no_web` |
+| 6 | WhatWeb | `web_endpoints.txt` no vacío **y** binario disponible (PATH o `tools/WhatWeb/`) — auto-detección 2026-09-07 | `skipped` / `skipped_no_web` |
 | 7 | Gobuster (dir) | `web_endpoints.txt` no vacío | `skipped_no_web` |
 | 7 | Gobuster (dns) | target es un **dominio** (no IP cruda) | `skipped_no_domain` |
 | 7 | Gobuster (tftp) | **puerto 69/UDP abierto** (probe UDP aprobado) | `skipped_no_tftp` |
@@ -359,5 +361,5 @@ Esquema exacto (igual a design.md):
 }
 ```
 
-- Estados válidos de `status`: `success` | `failed` | `skipped` (WhatWeb SALTADO) | `skipped_no_ports` (Nuclei sin puertos) | `skipped_no_web` (Nikto/WhatWeb/Gobuster-dir sin web) | `skipped_no_domain` | `skipped_no_tftp` | `skipped_no_tls` | `skipped_no_iis` (Step 9 sin web o sin firma Microsoft-IIS) | `skipped_no_smb` (Step 10 sin 139/445 abiertos). `tools_executed` contiene SIEMPRE los 10 steps (10 entradas), inclusive los saltados.
+- Estados válidos de `status`: `success` | `failed` | `skipped` (WhatWeb sin binario disponible) | `skipped_no_ports` (Nuclei sin puertos) | `skipped_no_web` (Nikto/WhatWeb/Gobuster-dir sin web) | `skipped_no_domain` | `skipped_no_tftp` | `skipped_no_tls` | `skipped_no_iis` (Step 9 sin web o sin firma Microsoft-IIS) | `skipped_no_smb` (Step 10 sin 139/445 abiertos). `tools_executed` contiene SIEMPRE los 10 steps (10 entradas), inclusive los saltados.
 - Se genera al terminar el pipeline del target (o al abandonarlo por `incomplete`).

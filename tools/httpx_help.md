@@ -1,11 +1,12 @@
 # HTTPX (ProjectDiscovery) — Reference Help
 ## Versión: verificada localmente con `httpx-pd -h` (2025-08-30)
 ## ⚠️ IMPORTANTE EN ESTE HOST:
-##   - El binario de ProjectDiscovery (recon probe) se llama **`httpx-pd`**
-##     (`/Users/claudio/go/bin/httpx-pd`). TODOS los comandos del pipeline usan `httpx-pd`.
-##   - El comando `httpx` del PATH (`/opt/homebrew/Caskroom/miniconda/base/bin/httpx`)
-##     es el cliente HTTP de Python (pip httpx 0.28.1): sirve para hacer requests,
-##     NO para probear hosts. No confundir.
+##   - El pipeline resuelve el binario de probe con **prioridad**: `httpx-toolkit` → `httpx-pd` → `httpx` (los 3 de ProjectDiscovery).
+##   - **Kali Linux:** el binario PD se llama **`httpx-toolkit`** (Kali renombra los binarios PD que chocan con paquetes Python). Es el PRINCIPAL.
+##   - **macOS / contenedor Docker:** se usa **`httpx-pd`** (`/Users/claudio/go/bin/httpx-pd`).
+##   - El `httpx` del PATH (cliente HTTP de Python, ej. `pip install httpx`) NUNCA sirve para probe: solo se acepta
+##     como fallback si realmente soporta `-l` (o sea, es el PD real). La resolución prioriza `httpx-toolkit`/`httpx-pd`
+##     justamente para no caer en él. No confundir.
 ##   - PD httpx es una "toolkit HTTP multi-purpose": probea host:puerto, detecta
 ##     web services, extrae títulos/tech y emite JSONL.
 

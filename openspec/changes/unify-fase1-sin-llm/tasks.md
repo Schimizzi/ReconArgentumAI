@@ -47,3 +47,10 @@
 .
 - [x] 4.4 Con Docker activo: `./run_docker.sh --auto --dry-run` y sanity check de las 9 tools + jq dentro de la imagen(y rebuild automático UNA vez si la imagen es vieja).
 - [x] 4.5 Verificar que `scripts/host/step3_nmap_detailed.md` quedó intacto (los cambios de unificación no tocan docs ajenos).
+
+## 5. Resolución dual del binario de HTTPX (httpx-pd/httpx)
+
+- [x] 5.1 `step2_httpx.sh`: resolver el binario con prioridad `httpx-pd` → `httpx` (ambos ProjectDiscovery) y ejecutarlo con `"$HTT"` (antes ejecutaba literalmente `httpx-pd`, inexistente en Kali nativo); abortar con error claro si ninguno existe.
+- [x] 5.2 `preflight_run.sh` y `run_host.sh`: aceptar `httpx-pd` **o** `httpx` en la verificación de tools, reportando cuál se usa.
+- [x] 5.3 Documentar la resolución y el aviso de no usar el `httpx` de Python en `tools/httpx_help.md`, `specs/agent_recon_pipeline.md` y `README.md` (Prerrequisitos).
+- [x] 5.4 Validar: `bash -n` en los scripts, preflight real (macOS → `httpx-pd`) y simulación de entorno solo-`httpx` (Kali → `OK httpx (probe PD)`).

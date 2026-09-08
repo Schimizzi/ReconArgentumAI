@@ -2,7 +2,7 @@
 # preflight_run.sh - Verificaciones previas a FASE 1 (RUN10).
 # UNIFICACIÓN KALI/DOCKER (2026-09-07): las wordlists se resuelven de forma portable
 # (mismo criterio que step7_gobuster.sh) y se agregan smbclient + ping a la verificación,
-# porque el Agente 1 completo (Steps 1-10) los requiere en VM Kali y en el contenedor.
+# porque el Agente 1 completo (Steps  1-10) los requiere en VM Kali y en el contenedor.
 set -uo pipefail
 WS="${WORKSPACE:-$(pwd)}"
 fail=0
@@ -18,6 +18,7 @@ resolve_wordlist() {
   local cand=""
   for cand in \
       "/opt/SecLists/$rel" \
+      "/usr/share/seclists/$rel" \
       "${HOME}/Documents/SecLists/$rel"; do
     if [ -s "$cand" ]; then
       printf '%s\n' "$cand"; return 0
@@ -34,13 +35,25 @@ for d in evidence logs plans cve_research reports; do
   mkdir -p "$WS/$d"
   [ -d "$WS/$d" ] || { echo "FALTA dir: $d"; fail=1; }
 done
-for t in nmap httpx-pd nuclei nikto gobuster sslyze smbclient ping jq python3; do
+for t in nmap nuclei nikto gobuster sslyze smbclient ping jq python3; do
   if command -v "$t" >/dev/null 2>&1; then
     echo "  OK  $t -> $(command -v "$t")"
   else
     echo "  FALTA $t"; fail=1
   fi
 done
+# HTTPX de probe (ProjectDiscovery): prioridad `httpx-toolkit` → `httpx-pd` → `httpx`.
+# En Kali Linux el binario PD se llama `httpx-toolkit`; en macOS/contenedor `httpx-pd`.
+# El `httpx` del PATH (cliente Python) solo se acepta si soporta `-l` (PD real).
+if command -v httpx-toolkit >/dev/null 2>&1; then
+  echo "  OK  httpx-toolkit -> $(command -v httpx-toolkit)"
+elif command -v httpx-pd >/dev/null 2>&1; then
+  echo "  OK  httpx-pd -> $(command -v httpx-pd)"
+elif command -v httpx >/dev/null 2>&1 && httpx -h 2>&1 | grep -qE -- '-l,| -list'; then
+  echo "  OK  httpx (probe PD) -> $(command -v httpx)"
+else
+  echo "  FALTA httpx-toolkit/httpx-pd (binario de probe ProjectDiscovery; el 'httpx' del PATH es el cliente Python)"; fail=1
+fi
 for wl in "web:$(resolve_wordlist web)" "dns:$(resolve_wordlist dns)"; do
   _tipo="${wl%%:*}"; _p="${wl#*:}"
   if [ -s "$_p" ]; then

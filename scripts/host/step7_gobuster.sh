@@ -12,10 +12,15 @@
 # EVOLUCIÓN del subshell con wait: la evidencia gobuster_*.txt se escribe igual.
 # UNIFICACIÓN KALI/DOCKER (2026-09-07): las wordlists se resuelven de forma portable
 # probando las ubicaciones típicas en este orden:
-#   1. /opt/SecLists/...              (dentro del contenedor Kali del Dockerfile)
-#   2. ${HOME}/Documents/SecLists/... (host macOS del pipeline original)
-#   3. ${WORKSPACE}/tools/seclists_common.txt (cache web local del repo, si existe)
+#   1. /opt/SecLists/...                     (dentro del contenedor Kali del Dockerfile)
+#   2. /usr/share/seclists/...               (VM Kali con apt install seclists)
+#   3. ${HOME}/Documents/SecLists/...       (host macOS del pipeline original)
+#   4. ${WORKSPACE}/tools/seclists_common.txt (cache web local del repo, si existe)
 # Así la VM Kali y el contenedor usan los MISMO scripts sin tocar paths hardcodeados.
+# FIX KALI 2026-09-07 (RUN#12 Prisma): gobuster verifica TLS por defecto. Con targets de
+# cert autofirmado (Avaya IP Office, Cisco, HP embebidos) el PreRun falla y luego CADA
+# request se cuelga hasta el timeout → ~12 min/target con retry y gobuster_*.txt vacío.
+# Se agrega `-k` (--no-tls-validation) al modo `dir` para saltar la verificación del cert.
 set -uo pipefail
 WORKSPACE="${WORKSPACE:-$(pwd)}"
 TARGET="$1"; ARG="$2"; PORT="$3"; MODE="$4"
@@ -33,6 +38,7 @@ resolve_wordlist() {
   local cand=""
   for cand in \
       "/opt/SecLists/$rel" \
+      "/usr/share/seclists/$rel" \
       "${HOME}/Documents/SecLists/$rel"; do
     if [ -s "$cand" ]; then
       printf '%s\n' "$cand"; return 0
@@ -91,6 +97,7 @@ case "$MODE" in
       --timeout "${TO}s" \
       -s 200,204,301,307,403 \
       -b '' \
+      -k \
       --force \
       -x txt,bak,old,zip; then
       echo "STEP7_HOST_FAIL mode=dir port=${PORT}" >&2

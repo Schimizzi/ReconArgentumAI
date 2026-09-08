@@ -51,6 +51,25 @@ El sistema SHALL poder ejecutar el DAG completo de recon (Fase 1, Agente 1) de f
 - **WHEN** el operador ejecuta `./run_docker.sh --auto --dry-run`(o `bash scripts/host/run_fase1_run3.sh --dry-run`)
 - **THEN** se muestra la secuencia planificada sin ejecutar scans ni crear evidencia
 
+### Requirement: Resolución del binario de probe HTTP (httpx-toolkit/httpx-pd/httpx)
+El sistema SHALL resolver el binario de HTTPX (probe web, ProjectDiscovery) con **prioridad `httpx-toolkit` → `httpx-pd` → `httpx`**, los tres de ProjectDiscovery. En **Kali Linux** el binario PD se llama **`httpx-toolkit`** (Kali renombra los binarios PD que chocan con paquetes Python) — es el PRINCIPAL. En macOS/contenedor Docker existe `httpx-pd`. La resolución SHALL **nunca** usar el `httpx` cliente HTTP de Python (presente en el PATH vía Conda/pip) como binario de probe: solo SHALL aceptar `httpx` como fallback si realmente soporta la flag `-l` (o sea, es el PD real). `preflight_run.sh` y `run_host.sh` SHALL verificar los nombres (reportando cuál se usa) y `step2_httpx.sh` SHALL ejecutar el binario resuelto.
+
+#### Scenario: Entorno Kali Linux con httpx-toolkit
+- **WHEN** el entorno tiene `httpx-toolkit` en el PATH
+- **THEN** el preflight y el Step 2 usan `httpx-toolkit` y reportan ese binario
+
+#### Scenario: Entorno macOS/contenedor con httpx-pd
+- **WHEN** el entorno tiene `httpx-pd` en el PATH y no `httpx-toolkit`
+- **THEN** el preflight y el Step 2 usan `httpx-pd` y reportan ese binario
+
+#### Scenario: httpx del PATH es el cliente Python
+- **WHEN** el entorno tiene `httpx` pero es el cliente HTTP de Python (no soporta `-l`)
+- **THEN** la resolución NO lo usa y reporta FALTA con un mensaje accionable (instalar el binario PD)
+
+#### Scenario: Ambos ausentes
+- **WHEN** el entorno no tiene ni `httpx-toolkit` ni `httpx-pd` ni un `httpx` de PD real
+- **THEN** el preflight reporta FALTA con un mensaje accionable y el Step 2 aborta con un error claro antes de escanear
+
 ### Requirement: Wordlists portables para Gobuster y preflight
 El sistema SHALL resolver las wordlists de Gobuster(y las verificadas por el preflight) probando **en orden**: `/opt/SecLists/...` (dentro del contenedor Kali / VM Kali con SecLists), `$HOME/Documents/SecLists/...` (host macOS) y **solo para la wordlist web**, `tools/seclists_common.txt` (cache local del repo). Los comandos SHALL usar la primera wordlist existente y NO hardcodear un path de host específico en los scripts. Si ninguna wordlist se encuentra, el preflight SHALL reportar la ausencia con un mensaje accionable que indique dónde instalar SecLists.
 
