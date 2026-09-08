@@ -1,0 +1,7 @@
+schema: spec-driven
+created: 2026-09-08
+# Sin delta de specs: el cambio es de tooling/infraestructura de la imagen Docker
+# (cómo se instalan los binarios de httpx/nuclei), NO de comportamiento del pipeline.
+# Los 10 steps, inputs/outputs y manifests quedan idénticos; la resolución
+# httpx-toolkit → httpx-pd → httpx ya priorizaba httpx-toolkit.
+skip_specs: true
