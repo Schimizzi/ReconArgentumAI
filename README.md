@@ -122,7 +122,7 @@ bash scripts/host/run_target.sh 1.2.3.4  # solo esa IP
   > Instalación automatizada: `./scripts/install_host_tools.sh`
 - **⚠️ HTTPX (probe web, ProjectDiscovery) — el binario se resuelve con prioridad `httpx-toolkit` → `httpx-pd` → `httpx`:**
   - **Kali Linux:** el binario PD se llama **`httpx-toolkit`** (Kali renombra los binarios PD que chocan con paquetes Python). Es el PRINCIPAL.
-  - **macOS / contenedor Docker:** el pipeline usa **`httpx-pd`** (en macOS vive en `go/bin/httpx-pd`; el Dockerfile lo crea como symlink `httpx-pd → httpx`).
+  - **macOS / contenedor Docker:** el pipeline usa **`httpx-pd`** (en macOS vive en `go/bin/httpx-pd`). El contenedor Docker instala **`httpx-toolkit`** vía apt (mismo paquete de Kali que la VM: `sudo apt install httpx-toolkit`).
   - ⚠️ **No confundir:** el comando `httpx` del PATH (ej. el de Conda/Python `pip install httpx`) es el **cliente HTTP de Python** y **NO sirve** para probe. La resolución prioriza `httpx-toolkit`/`httpx-pd` justamente para evitar caer en él.
   - Verificación: `preflight_run.sh` y `run_host.sh` aceptan `httpx-toolkit` **o** `httpx-pd` (y `httpx` solo si es PD real) y reportan cuál se usa.
 

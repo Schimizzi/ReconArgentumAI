@@ -97,9 +97,8 @@ jq -r '(.scan | keys[]) as $t | .scan[$t].tcp | to_entries[] |
 ### Step 2 — HTTPX probe web (input: `open_ports.txt`)
 
 > ⚠️ El binario de probe HTTP se resuelve con **prioridad `httpx-toolkit` → `httpx-pd` → `httpx`** (los 3 de ProjectDiscovery).
-> En **Kali Linux** el binario PD se llama **`httpx-toolkit`** (Kali renombra los binarios PD que chocan con paquetes Python) — es el PRINCIPAL.
-> En el contenedor Docker y macOS existe `httpx-pd` (symlink `httpx-pd → httpx` en Docker; binario en
-> `go/bin/httpx-pd` en macOS). El `httpx` del PATH (cliente HTTP de Python) NUNCA sirve para probe: la resolución
+> En **Kali Linux** (VM y contenedor Docker) el binario PD se llama **`httpx-toolkit`** (Kali renombra los binarios PD que chocan con paquetes Python) — es el PRINCIPAL, y se instala con `sudo apt install httpx-toolkit`.
+> En macOS existe `httpx-pd` (binario en `go/bin/httpx-pd`). El `httpx` del PATH (cliente HTTP de Python) NUNCA sirve para probe: la resolución
 > lo evita priorizando `httpx-toolkit`/`httpx-pd`, y solo lo acepta como fallback si realmente soporta `-l` (PD real).
 
 ```bash
