@@ -6,8 +6,8 @@ WS="/Users/claudio/OpenSpec_project/ReconArgentumAI"
 export PATH="$HOME/.local/bin:$PATH"
 
 {
-  echo "=== brew install nikto gobuster ==="
-  brew install nikto gobuster 2>&1 | tail -6
+  echo "=== brew install nikto gobuster hydra ==="
+  brew install nikto gobuster hydra 2>&1 | tail -6
 
   echo "=== brew install pipx ==="
   brew install pipx 2>&1 | tail -3
@@ -29,7 +29,7 @@ export PATH="$HOME/.local/bin:$PATH"
   (cd "$WS/tools/WhatWeb" && ruby whatweb --version 2>&1 | head -3) || echo WHATWEB_TEST_FAIL
 
   echo "=== verificacion final ==="
-  for t in nmap nikto gobuster jq httpx-pd nuclei; do
+  for t in nmap nikto gobuster jq httpx-pd nuclei hydra; do
     printf '%s: ' "$t"; command -v "$t" 2>/dev/null || echo FALTA-PATH
   done
   printf 'sslyze: '; command -v sslyze 2>/dev/null || echo FALTA-PATH

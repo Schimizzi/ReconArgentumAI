@@ -104,6 +104,14 @@ bash scripts/host/run_target.sh 1.2.3.4  # solo esa IP
 # Modo Host (verifica tools + conectividad e imprime instrucciones)
 ./run_host.sh 192.168.8.1
 ```
+
+> 🔐 **Auditoría manual de credenciales (Hydra)** — opcional y **fuera del pipeline**:
+> `bash scripts/hydra_audit.sh --all` recorre todos los targets autorizados × sus
+> puertos auditables (21/ftp, 22/ssh, 6379/redis, 1433/mssql, …) con **máximo 25
+> intentos por servicio** (solo evidencia), clasifica cada uno como
+> `VULNERABLE / NO_VULNERABLE / INCONCLUSO` y deja todo el verbose en
+> `logs/hydra.log`. Requiere `hydra` (host: `brew install hydra`; ya va en el Dockerfile).
+> Ver [`scripts/hydra_audit.md`](scripts/hydra_audit.md).
 ---
 
 ## ⚙️ Prerrequisitos

@@ -40,6 +40,7 @@ Cada `.md` que acompaña a un script explica, sin código:
 | `nvd_cve_detail.py` | Trae el detalle de un CVE específico | [▶ nvd_cve_detail.md](nvd_cve_detail.md) |
 | `organize_project.py` | Ordena y consolida toda la evidencia en la carpeta del cliente | [▶ organize_project.md](organize_project.md) |
 | `make_vuln_report.py` | Genera los informes de vulnerabilidades (Agente 6) — acumula corridas con horario | [▶ make_vuln_report.md](make_vuln_report.md) |
+| `hydra_audit.sh` | Auditoría **manual** de credenciales débiles con Hydra (por target o `--all`) — fuera del pipeline, con límite de intentos y log central | [▶ hydra_audit.md](hydra_audit.md) |
 | `cleanup_engagement.sh` | Borra toda la evidencia del cliente y deja el repo listo para el próximo | [▶ cleanup_engagement.md](cleanup_engagement.md) |
 
 ### Scripts del pipeline de escaneo (`scripts/host/`)
@@ -98,4 +99,7 @@ bash scripts/host/run_target.sh 10.155.10.15
 
 Estos scripts realizan **reconocimiento de seguridad** y generan tráfico hacia la red. Deben
 usarse **solo sobre sistemas autorizados** (propia infraestructura o contrato de pentest firmado).
-El proyecto **nunca ejecuta exploits**; solo documenta y reporta. Ante la duda, **no escanees**.
+El proyecto **nunca ejecuta exploits**; solo documenta y reporta. `hydra_audit.sh` realiza
+**pruebas de autenticación activas** (fuerza bruta limitada a 25 intentos/servicio): es una
+actividad aún más intrusiva y requiere **autorización explícita por target**. Ante la duda,
+**no escanees**.
