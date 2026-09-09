@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         samba-client iputils-ping \
         git curl ca-certificates unzip xz-utils \
         python3 python3-pip \
+        hydra \
     && rm -rf /var/lib/apt/lists/*
 
 # 2) SecLists (wordlists para gobuster/dirsearch/nuclei custom)
@@ -27,11 +28,11 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages sslyze
 # 4) Workspace
 WORKDIR /workspace
 
-# Sanity check: el build FALLA si falta alguna de las 9 tools del Agente 1 + jq
+# Sanity check: el build FALLA si falta alguna de las 9 tools del Agente 1 + jq + hydra (manual)
 RUN set -eux; \
     command -v nmap; command -v httpx-toolkit; command -v nuclei; \
     command -v nikto; command -v whatweb; command -v gobuster; \
     command -v sslyze; command -v smbclient; \
-    command -v ping; command -v jq
+    command -v ping; command -v jq; command -v hydra
 
 CMD ["bash"]
