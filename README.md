@@ -165,7 +165,7 @@ Editá `config/scope.json` con los targets **autorizados** del engagement:
 
 ```json
 {
-  "engagement_id": "PENTEST-2025-001",
+  "engagement_id": "PENTEST-2026-001",
   "authorized_targets": [
     {"id": "TGT-001", "ip": "10.10.0.10"},
     {"id": "TGT-002", "ip": "192.168.1.50"}
