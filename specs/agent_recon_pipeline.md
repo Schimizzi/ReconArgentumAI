@@ -5,7 +5,16 @@
 > `.cline/master_prompt.md` (rol y guardrails) y `config/approved_commands.md` (única fuente de comandos).
 > `<WORKSPACE>` = raíz del proyecto. Todos los paths son relativos a `<WORKSPACE>` (ver master_prompt.md §0).
 
-## 0. Precondiciones de entrada
+## 0. Regla de Separación de Fases (Fase 0 vs Fase 1)
+
+**El agente NUNCA debe intercalar calibración con ejecución.**
+
+- **Fase 0 (Calibración Global):** El agente debe proponer y calibrar la configuración de TODAS las herramientas en un solo paso interactivo con el usuario (modificando `config/stealth.yaml` y `config/approved_commands.md`). NO ejecuta ningún escaneo todavía.
+- **Fase 1 (Ejecución Autónoma):** Una vez aprobada la Fase 0, el agente debe usar EXCLUSIVAMENTE los scripts orquestadores (`scripts/host/run_fase1_run3.sh` o `run_host.sh`) para ejecutar todo el pipeline de forma desatendida. Queda **estrictamente prohibido** ejecutar los `step_X.sh` de forma manual o interactiva.
+
+> 💡 El orquestador (`run_fase1_run3.sh` / `run_target.sh`) ya implementa la secuencia correcta (10 steps), los delays de stealth, el retry 1x y la generación del manifest. No hay necesidad de orquestar paso a paso desde el prompt.
+
+## 1. Precondiciones de entrada
 
 - `config/scope.json` con los targets reales del engagement (plantilla reemplazada).
 - `config/stealth.yaml` calibrado en Fase 0 (timeouts/rates/threads, decoys).
