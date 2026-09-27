@@ -30,6 +30,9 @@ evidencia de todos los targets y escribe los informes en `reports/`. No acepta a
   - `final_report.md` / `.json` — resumen de toda la corrida.
   - `<objetivo>_report.md` / `.json` — detalle por objetivo.
 
+Se ejecuta una vez terminadas las fases de escaneo (Fase 1) y de análisis (Fase 2): lee la
+evidencia de todos los targets y escribe los informes en `reports/`. **No acepta argumentos.**
+
 ## 🧠 Detalles importantes
 
 - **Escala de riesgo:** usa el puntaje CVSS para etiquetar: 9+ = CRÍTICO, 7+ = ALTO, 4+ = MEDIO,
@@ -38,3 +41,7 @@ evidencia de todos los targets y escribe los informes en `reports/`. No acepta a
   informes (la evidencia original no se toca).
 - **Registra la metodología:** incluye en el informe la configuración de sigilo usada y el estado
   de cada paso por objetivo.
+- **Parser YAML artesanal:** el script parsea `stealth.yaml` con `split(":")` en lugar de usar
+  una librería YAML. Esto funciona para los valores actuales pero es frágil si una línea contiene
+  `:` (p.ej. un valor con dos puntos). Los valores se mantienen simples para preservar la
+  compatibilidad.

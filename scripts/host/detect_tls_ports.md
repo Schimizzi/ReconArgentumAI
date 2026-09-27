@@ -17,8 +17,12 @@ Lo sabe por varias pistas, en orden:
 3. El número de puerto es uno de los "de siempre" con TLS (443, 8443, 993, 995, 636, 465…) →
    TLS directo.
 4. Puerto 3389 (escritorio remoto RDP) → STARTTLS rdp.
-5. Servicios que negocian TLS después de conectarse (smtp, imap, pop3, ftp, ldap…) → STARTTLS
-   con ese protocolo.
+5. Servicios que negocian TLS después de conectarse (smtp, imap, pop3, ftp, ldap, **postgres,
+   mysql, xmpp**) → STARTTLS con ese protocolo.
+
+Desde la **optimización multiprotocolo** (2026-08-31), SSLyze ya no depende de `web_endpoints.txt`
+para saber qué puertos revisar: este script lee **`nmap_detailed.json`** (o el XML como fallback)
+y deduce los puertos TLS según el nombre del servicio, el túnel SSL y el puerto conocido.
 
 ## ⏱️ ¿Cuándo se usa?
 

@@ -39,16 +39,24 @@
 
 | Step | Herramienta | Input | Output en `evidence/<target>/` | Post-proceso |
 |---|---|---|---|---|
-| 1 | Nmap (port scan) | target (scope.json) | `nmap_ports.xml`, `nmap_ports.json`, `nmap_ports.txt` | extraer abiertos → `open_ports.txt` |
-| 2 | HTTPX (probe web) | `open_ports.txt` | `httpx.json` (JSONL completo) | extraer URLs http/https → `web_endpoints.txt` |
+| 1 | Nmap (port scan) | target (IP) | `nmap_ports.xml`, `nmap_ports.json`, `nmap_ports.txt`, `nmap_ports.gnmap` | extraer abiertos → `open_ports.txt` |
+| 2 | HTTPX (probe web) | `open_ports.txt` | `httpx.json` (JSONL completo, deduplicado sort -u) | extraer URLs http/https → `web_endpoints.txt` |
 | 3 | Nmap (-sC -sV) | `open_ports.txt` (solo abiertos) | `nmap_detailed.json`, `nmap_detailed.xml`, `nmap_detailed.txt` | — |
-| 4 | Nuclei | `open_ports.txt` — **SIEMPRE** si hay ≥1 puerto abierto | `nuclei.json` (JSONL) | — |
-| 5 | Nikto | `web_endpoints.txt` — **solo si hay web** | `nikto_<port>.json` (o `.html`+`.txt`) | — |
-| 6 | WhatWeb | `web_endpoints.txt` — **solo si hay web** | `whatweb.json` (o `.txt`) | — |
-| 7 | Gobuster/Dirsearch | **multi-modo** — `dir` (si hay web) + `dns` (si target es dominio) + `tftp` (si UDP 69 abierto) | `gobuster_<port>.txt`, `gobuster_dns.txt`, `gobuster_tftp.txt` | — |
-| 8 | SSLyze | **puertos con túnel SSL/TLS** detectados por Nmap (no solo 443/8443) | `sslyze_<port>.json` (o `.txt`) | — |
-| 9 | IIS Shortname (8.3) | **solo si hay web** + firma `Microsoft-IIS` en `httpx.json` (`webserver`) | `iis_shortname_evidence.txt/.json`, `iis_scan_urls.txt`, `iis_shortname_commands_outputs.txt` | — |
-| 10 | SMB Enum (`step10_smbclient_enum.sh`) | **solo si TCP 139/445 abierto** (`open_ports.txt` o `nmap_detailed.xml`) | `smbclient_shares.txt`, `smbclient_<share>.txt` | — |
+| 4 | Nuclei | `open_ports.txt` — **SIEMPRE** si hay ≥1 puerto abierto | `nuclei.json` (JSONL, filtrado `critical,high,medium`) | — |
+| 5 | Nikto | `web_endpoints.txt` — **solo si hay web** | `nikto_<port>.json` por URL (Tuning 123b, watchdog) | — |
+| 6 | WhatWeb | `web_endpoints.txt` — **solo si hay web** | `whatweb.json` (JSON append, agresión `-a 1`) | — |
+| 7 | Gobuster | **multi-modo** — `dir` (web) + `dns` (dominio) + `tftp` (UDP 69) | `gobuster_<port>.txt`, `gobuster_dns.txt`, `gobuster_tftp.txt` | — |
+| 8 | SSLyze | puertos TLS detectados del Step 3 (incluye STARTTLS: RDP, SMTP, IMAP, POP3, FTP, LDAP, PostgreSQL) | `sslyze_<port>.json` por puerto TLS | — |
+| 9 | IIS Shortname (8.3) | **solo si** hay web + `Microsoft-IIS`/`IIS` en httpx.json | `iis_shortname_evidence.txt/.json`, `iis_scan_urls.txt` | — |
+| 10 | SMB Enum | **solo si** TCP 139/445 abiertos | `smbclient_shares.txt`, `smbclient_<share>.txt` | — |
+
+### Workarounds y edge cases
+
+- **Step 1:** en Kali 7.99 (arm64) el flag `-oJ` de Nmap está roto; se trabaja con `-oX` (XML) y se deriva JSON con `xml_to_nmap_json.py`. Scan type autodetectado por EUID (`-sS` con root / `-sT` sin root).
+- **Step 2:** el binario HTTPX se resuelve con prioridad `httpx-toolkit` → `httpx-pd` → `httpx` (solo si el flag `-l` existe). `web_endpoints.txt` se deduplica con `sort -u` para evitar URLs repetidas por redirects HTTP→HTTPS.
+- **Step 5:** watchdog de Nikto: si el servidor ignora `-maxtime`, el runner corta el proceso tras `nikto_maxtime_seconds × 3` y marca `failed`.
+- **Step 7:** cutoff de Gobuster: si no responde al diccionario, el runner corta tras `gobuster_max_seconds` (default 180s). Flag `-k` (no-tls-validation) para certificados autofirmados. Wordlists portables (`/opt/SecLists` → `~/Documents/SecLists` → `tools/seclists_common.txt`).
+- **Step 8:** workaround Bash 3.2 (macOS) para arrays vacíos en SSLyze: `"${ARGS[@]+"${ARGS[@]}"}"`.
 
 Orden SIEMPRE lineal `1→2→3→…→10`, sin paralelismo (R3 del master_prompt).
 

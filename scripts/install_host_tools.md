@@ -22,10 +22,17 @@ bash scripts/install_host_tools.sh
 
 | Herramienta | Para qué sirve | Cómo se instala |
 |---|---|---|
+| `nmap` | Descubre puertos/servicios abiertos | `brew` |
 | `nikto` | Escáner de seguridad web | `brew` |
 | `gobuster` | Descubre carpetas ocultas en webs | `brew` |
+| `nuclei` | Escáner de vulnerabilidades multiprotocolo | `brew` |
+| `hydra` | Auditoría manual de credenciales | `brew` |
 | `sslyze` | Analiza seguridad de conexiones cifradas (TLS) | `pipx` |
 | `whatweb` | Identifica la tecnología de los sitios web | descarga manual (git clone) |
+| `httpx` | Probe web de ProjectDiscovery | `brew install httpx-toolkit` |
+| `jq` | Procesa archivos JSON en scripts | `brew` |
+| `smbclient` | Enumera recursos compartidos SMB | `brew install samba` |
+| `python3` | Ejecuta scripts Python del pipeline | `brew` |
 
 También verifica al final que todas las herramientas queden accesibles y guarda un registro del
 proceso en `/tmp/tools_install2.log`.

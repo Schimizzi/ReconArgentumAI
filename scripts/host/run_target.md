@@ -43,8 +43,15 @@ bash scripts/host/run_target.sh 10.155.10.15
 ## ⚠️ Notas — guarda reglas internas
 
 - **R1 (scope):** si la IP no está en la lista de autorizados o está excluida, **aborta**.
-- **R3 (sigilo):** espera un delay entre herramientas (por defecto 30 s) para no hacer ruido;
-  y si ya hay una corrida sobre el mismo objetivo, **no deja que otra empiece** (usa un "candado").
-- **Retry:** si un paso falla, lo intenta **una vez más** antes de declararlo fallido.
-- Si el paso 1 no encuentra puertos abiertos, el objetivo queda marcado como "incomplete" (no
+- **R3 (sigilo):** espera un delay entre herramientas (por defecto 30 segundos, de
+  `config/stealth.yaml`) para no hacer ruido. Si ya hay una corrida sobre el mismo objetivo,
+  **no deja que otra empiece** (usa un candado `evidence/<IP>/.run.lock` con `mkdir` atómico).
+- **Watchdog de Nikto:** algunos servidores (ESXi, HP embebidos) ignoran `-maxtime` y se cuelgan.
+  El script implementa un watchdog: timeout = `nikto_maxtime_seconds × 3`, mata el proceso y marca
+  el paso como `failed`.
+- **Cutoff de Gobuster:** si Gobuster no responde al diccionario (timeouts en ~23.7k requests),
+  el script lo corta tras `gobuster_max_seconds` (default 180s) y marca `failed`.
+- **Retry:** si un paso falla, lo intenta **una vez más** antes de declararlo fallido. Excepción:
+  Step 1 (Nmap) marca el target `incomplete` si falla dos veces.
+- Si el paso 1 no encuentra puertos abiertos, el objetivo queda marcado como `incomplete` (no
   tiene sentido seguir).
