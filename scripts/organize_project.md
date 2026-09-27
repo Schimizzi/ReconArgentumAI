@@ -20,6 +20,9 @@ terminaron. Es el paso previo a generar los informes de vulnerabilidades.
 # Procesa todos los objetivos escaneados → carpeta CLIENTE/
 python3 scripts/organize_project.py
 
+# Con otro nombre de proyecto (en vez de CLIENTE)
+python3 scripts/organize_project.py --project ACME-CORP-2025
+
 # Solo simular qué haría (no crea ni copia nada)
 python3 scripts/organize_project.py --dry-run
 
@@ -28,6 +31,9 @@ python3 scripts/organize_project.py --target 10.155.10.15
 
 # Solo los objetivos registrados como autorizados en config/scope.json
 python3 scripts/organize_project.py --scope
+
+# No sobrescribir archivos ya existentes
+python3 scripts/organize_project.py --no-clobber
 ```
 
 ## 📥 Entrada / 📤 Salida

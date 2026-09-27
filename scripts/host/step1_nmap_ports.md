@@ -26,7 +26,8 @@ bash scripts/host/step1_nmap_ports.sh 10.155.10.15
 ## 🧠 Detalles importantes
 
 - Escanea la **lista de puertos del cliente** definida en `config/stealth.yaml` (`clienteP`, reemplaza el antiguo `--top-ports 1000`); si no está definida, usa los **1000 puertos más comunes**. Solo reporta los **abiertos**.
-- No hace resolución de nombres DNS (más rápido y directo).
-- Retries y tiempos de espera salen de la configuración de sigilo (`config/stealth.yaml`), no
-  están "a dedo".
+- **Flags:** `-n` (sin resolución DNS, permanente por decisión del usuario), sin `-T5` ni `--max-rate` en Step 1 (timing default de Nmap).
+- **Tipo de scan autodetectado por privilegios:** `-sS` (SYN) si `EUID == 0` (root en VM Kali/contenedor), `-sT` (TCP Connect) en caso contrario (macOS sin sudo).
+- **Workaround `-oJ`:** en Kali 7.99 (arm64) el flag `-oJ` de Nmap está roto. El script usa `-oX` (XML) y deriva el JSON con `scripts/xml_to_nmap_json.py`.
+- Retries y RTT desde `config/stealth.yaml` (`nmap_max_retries`, `nmap_initial_rtt_timeout_ms`, `nmap_max_rtt_timeout_ms`).
 - Al inicio **limpia** resultados anteriores del mismo objetivo para no mezclar escaneos.

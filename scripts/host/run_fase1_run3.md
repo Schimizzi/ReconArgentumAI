@@ -34,6 +34,10 @@ bash scripts/host/run_fase1_run3.sh --dry-run
 
 - **R1 (scope):** antes de cada objetivo vuelve a verificar que siga autorizado y no excluido; si
   no lo está, lo salta y lo anota.
+- **Delay entre targets:** el tiempo de espera entre un objetivo y el siguiente se lee de
+  `config/stealth.yaml` (`delay_between_targets_minutes`, default 5 min). Configurable en Fase 0.
 - Es **secuencial**: no dispara dos objetivos a la vez (lo pide la configuración de sigilo).
+- **Modo `--dry-run`:** simula la corrida completa (muestra los comandos que ejecutaría sin
+  escanear nada). Las líneas muestran `(dry-run)` en el log.
 - El nombre "run3" viene de la **tercera vuelta** de escaneo del proyecto (cada vuelta ajusta
   objetivos y velocidad según lo que pidió el cliente).

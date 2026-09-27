@@ -51,6 +51,9 @@ python3 scripts/make_vuln_report.py --project CLIENTE --target 10.155.10.15 --re
   no se modifica).
 - **Acumula corridas:** cada vez que se ejecuta con hallazgos, el informe **se concatena** con
   la corrida anterior y marca la división con el horario (`# ===== corrida ... =====` en el `.txt`,
-  `Corrida del reporte: ...` en el `.doc`). No sobrescribe lo previo. Usá `--reset` para borrar
-  el historial de un objetivo y empezar de cero, o `--no-clobber` para no acumular.
+  `Corrida del reporte: ...` en el `.doc`). No sobrescribe lo previo.
+- **`--reset`:** borra los reportes previos del target y arranca de cero (elimina el historial
+  acumulado). Usar cuando se quiere regenerar desde una base limpia.
+- **`--no-clobber`:** no acumula una nueva corrida si ya existe el reporte (útil para mantener
+  la versión actual intacta).
 - Si un objetivo no tiene hallazgos, solo lo avisa (`⚠️`) y **no toca** los informes ya generados.

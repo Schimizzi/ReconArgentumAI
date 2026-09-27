@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define la ejecución secuencial del pipeline de recon contra cada target: el DAG lineal de 10 steps sobre las 9 herramientas, los inputs/outputs y post-procesos por step, el **Service-Based Routing** por step (herramientas multiprotocolo como Nuclei/Gobuster/SSLyze/IIS-Shortname/SMB-Enum se ejecutan según servicios detectados, no solo según endpoints web), los timeouts parametrizados desde `config/stealth.yaml`, el manifest por target y el manejo de errores.
+Define la ejecución secuencial del pipeline de recon contra cada target: el DAG lineal de 10 steps sobre las herramientas, los inputs/outputs y post-procesos por step, el **Service-Based Routing** por step (herramientas multiprotocolo como Nuclei/Gobuster/SSLyze/IIS-Shortname/SMB-Enum se ejecutan según servicios detectados, no solo según endpoints web), los timeouts parametrizados desde `config/stealth.yaml`, el manifest por target, el manejo de errores, la autodetección del scan type de Nmap por privilegios, las wordlists portables y los workarounds integrados (watchdog Nikto, cutoff Gobuster, -oJ roto).
 
 ## Requirements
 
@@ -24,12 +24,27 @@ El sistema SHALL ejecutar Nmap sobre el target con los parámetros aprobados en 
 - **WHEN** Nmap Step 1 falla y su retry único también falla
 - **THEN** el target se marca como `incomplete` en el manifest y el pipeline pasa al siguiente target
 
+#### Scenario: Lista de puertos personalizada (clienteP)
+- **WHEN** `config/stealth.yaml` define `clienteP` con una lista de puertos (ej. 98 puertos del cliente)
+- **THEN** el Step 1 escanea esos puertos específicos en lugar de `--top-ports 1000`
+- **AND** si `clienteP` no existe o está vacío, el fallback es `--top-ports 1000`
+
+#### Scenario: Workaround -oJ (JSON output roto en Kali arm64)
+- **WHEN** el Step 1 se ejecuta en Kali 7.99 (arm64/aarch64)
+- **THEN** el flag `-oJ` de Nmap está roto y no produce archivo; el script usa `-oX` (XML) y deriva JSON con `scripts/xml_to_nmap_json.py`
+- **AND** el pipeline funciona correctamente porque el JSON derivado tiene el mismo sub-schema que el esperado por los pasos siguientes
+
 ### Requirement: Step 2 — Probe de servicios web
-El sistema SHALL ejecutar HTTPX sobre `open_ports.txt`, guardando `httpx.json` completo (incluyendo resultados no-web). Como post-proceso SHALL extraer únicamente las URLs con esquema `http://` o `https://` a `evidence/<target>/web_endpoints.txt`.
+El sistema SHALL ejecutar HTTPX sobre `open_ports.txt`, guardando `httpx.json` completo (incluyendo resultados no-web). Como post-proceso SHALL extraer únicamente las URLs con esquema `http://` o `https://` a `evidence/<target>/web_endpoints.txt`. El binario de HTTPX SHALL resolverse con prioridad `httpx-toolkit` (Kali) → `httpx-pd` (macOS) → `httpx` (solo si soporta el flag `-l`, demostrando que es el binario de ProjectDiscovery y no el cliente Python).
 
 #### Scenario: Extracción de endpoints web
 - **WHEN** HTTPX termina con éxito
 - **THEN** `web_endpoints.txt` contiene una URL por línea, solo aquellas con esquema http o https
+
+#### Scenario: Deduplicación de endpoints web por redirect
+- **WHEN** HTTPX sigue un redirect de HTTP 80 a HTTPS 443 y registra la misma URL final dos veces
+- **THEN** el post-proceso aplica `sort -u` sobre las URLs extraídas antes de escribirlas a `web_endpoints.txt`
+- **AND** Nikto, WhatWeb y Gobuster no escanean el mismo endpoint duplicado
 
 ### Requirement: Service-Based Routing por step (Optimización Multiprotocolo)
 El sistema SHALL decidir la ejecución de los Steps 4-10 según los servicios detectados por step
@@ -42,7 +57,7 @@ web, `dns` si el target es un dominio (no IP cruda), y `tftp` si el puerto 69/UD
 (probe UDP parametrizado desde `stealth.yaml`). **SSLyze (Step 8)** SHALL ejecutarse contra
 los puertos con túnel SSL/TLS detectados en la salida de Nmap del Step 3 (tunnel="ssl",
 servicios TLS conocidos, puertos TLS bien conocidos: 443/465/636/990/992/993/995/3389-RDP/
-5986-WinRM/etc.), con soporte `--starttls` (rdp, smtp, imap, pop3, ftp, ldap, postgres).
+5986-WinRM/etc.), con soporte `--starttls` (rdp, smtp, imap, pop3, ftp, ldap, postgres, mysql, xmpp).
 **IIS Shortname (Step 9)** SHALL ejecutarse solo si `web_on` es verdadero (hay endpoints web
 confirmados por HTTPX) y el `httpx.json` del Step 2 reporta la firma del servidor
 `Microsoft-IIS`/`IIS` en el campo `webserver`; se ejecuta con `step9_iis_shortname_scan.py --ev-dir`
@@ -129,3 +144,46 @@ Si una herramienta falla, el sistema SHALL reintentar UNA vez con el mismo coman
 #### Scenario: Fallo definitivo de herramienta intermedia
 - **WHEN** Nikto falla dos veces consecutivas contra un endpoint
 - **THEN** el manifest registra `failed` con el error y el pipeline continúa con WhatWeb
+
+### Requirement: Scan type autodetectado por privilegios (Unificación Kali/Docker 2026-09-07)
+Los Steps 1 y 3 SHALL autodetectar el tipo de scan de Nmap según los privilegios del proceso: si `EUID` es 0 (root en VM Kali o contenedor Docker) SHALL usar `-sS` (SYN scan); en caso contrario (macOS sin sudo) SHALL usar `-sT` (TCP Connect scan). El mismo script SHALL funcionar en los tres entornos (host macOS, VM Kali, contenedor Docker) sin editar comandos.
+
+#### Scenario: Contenedor Docker con root
+- **WHEN** el Step 1 se ejecuta dentro del contenedor Docker (EUID == 0)
+- **THEN** Nmap usa `-sS` y raw sockets (requiere `cap_add: NET_RAW` en docker-compose.yml)
+
+#### Scenario: Host macOS sin privilegios
+- **WHEN** el Step 1 se ejecuta en macOS sin sudo (EUID != 0)
+- **THEN** Nmap usa `-sT` (TCP Connect scan), que funciona sin permisos especiales
+
+### Requirement: Wordlists portables (Unificación Kali/Docker 2026-09-07)
+El sistema SHALL resolver las wordlists de Gobuster y del preflight probando ubicaciones en orden portable: `/opt/SecLists/...` → `/usr/share/seclists/...` → `$HOME/Documents/SecLists/...` → `tools/seclists_common.txt` (fallback solo web). Esto SHALL funcionar idénticamente en host macOS, VM Kali y contenedor Docker.
+
+#### Scenario: Wordlist en contenedor Docker
+- **WHEN** el Step 7 se ejecuta dentro del contenedor Docker
+- **THEN** la wordlist se resuelve a `/opt/SecLists/Discovery/Web-Content/common.txt` (instalada en el Dockerfile)
+
+#### Scenario: Wordlist en macOS sin SecLists
+- **WHEN** el Step 7 se ejecuta en macOS y no existe `/opt/SecLists` ni `~/Documents/SecLists`
+- **THEN** se usa `tools/seclists_common.txt` como fallback (cache web mínimo del repositorio)
+
+### Requirement: Workarounds de ejecución (Nikto watchdog y Gobuster cutoff)
+El sistema SHALL implementar dos workarounds para herramientas que no responden dentro de los timeouts estándar: (1) un **watchdog para Nikto** que corta el proceso si su duración supera `nikto_maxtime_seconds × 3` (algunos servidores como ESXi/HP embebidos ignoran `-maxtime`); (2) un **cutoff para Gobuster** que lo corta tras `gobuster_max_seconds` (default 180s) si el servidor no responde a las solicitudes del diccionario.
+
+#### Scenario: Servidor que ignora -maxtime de Nikto
+- **WHEN** Nikto se cuelga contra un servidor que ignora `-maxtime` (maxtime=30s pero el proceso sigue activo >90s)
+- **THEN** el watchdog mata el proceso y marca el paso como `failed` en el manifest
+- **AND** el pipeline continúa con el siguiente step sin abortar el target
+
+#### Scenario: Gobuster sin respuesta a dict
+- **WHEN** el servidor web no responde a las solicitudes del diccionario (~23.7k requests causan timeouts en cadena)
+- **THEN** el cutoff corta Gobuster tras `gobuster_max_seconds` (180s) y marca `failed`
+- **AND** el pipeline continúa con el siguiente step
+
+### Requirement: Bloqueo por target (R3 Lock)
+El sistema SHALL implementar un mecanismo de bloqueo por target mediante `mkdir` atómico en `evidence/<target>/.run.lock`. Si dos instancias de `run_target.sh` intentan ejecutarse concurrentemente sobre el mismo target, la segunda SHALL abortar inmediatamente para evitar corrupción de evidencia.
+
+#### Scenario: Intento de ejecución concurrente
+- **WHEN** una segunda instancia de `run_target.sh` se ejecuta sobre un target que ya tiene un lock activo
+- **THEN** la segunda instancia aborta con el mensaje `R3-FAIL: otro pipeline está corriendo sobre X`
+- **AND** la primera instancia continúa sin interrupción y libera el lock al terminar (trap EXIT)

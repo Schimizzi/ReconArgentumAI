@@ -2,6 +2,65 @@
 
 ## 🧩 ¿Qué es?
 
+Ejecuta **Gobuster**, una herramienta de **descubrimiento de contenido** que busca
+carpetas, archivos y subdominios ocultos. Tiene **tres modos** que se activan según el
+tipo de target:
+
+- **`dir`** — descubre carpetas y archivos en sitios web (ej. `/admin`, `/backup.zip`).
+- **`dns`** — descubre subdominios (ej. `mail.ejemplo.com`, `dev.ejemplo.com`).
+- **`tftp`** — descubre archivos en servidores TFTP (puerto 69/UDP).
+
+## ⏱️ ¿Cuándo se usa?
+
+Después de WhatWeb (paso 6). Lo llama `run_target.sh`, que decide qué modo(s) activar.
+
+## ▶️ Cómo se usa
+
+```bash
+# Normal (lo llama el pipeline automáticamente):
+# Modo dir sobre una URL web
+bash scripts/host/step7_gobuster.sh <IP> <URL> <PORT> dir
+
+# Modo dns sobre un dominio
+bash scripts/host/step7_gobuster.sh <IP> <DOMINIO> 0 dns
+
+# Modo tftp sobre una IP
+bash scripts/host/step7_gobuster.sh <IP> <IP> 69 tftp
+```
+
+## 📥 Entrada / 📤 Salida
+
+- **Entrada:** `web_endpoints.txt` (modo dir), o `domain` desde la URL (modo dns),
+  o resultado del probe UDP 69 (modo tftp).
+- **Salida:**
+  - `evidence/<IP>/gobuster_<PORT>.txt` (modo dir).
+  - `evidence/<IP>/gobuster_dns.txt` (modo dns).
+  - `evidence/<IP>/gobuster_tftp.txt` (modo tftp).
+
+## 🧠 Detalles importantes
+
+- **Wordlists portables:** la lista de palabras (wordlist) se resuelve probando varias
+  ubicaciones en orden: `/opt/SecLists/...` → `/usr/share/seclists/...` →
+  `~/Documents/SecLists/...` → `tools/seclists_common.txt` (cache local).
+  Así funciona igual en Docker, VM Kali y macOS.
+- **Timeouts desde `stealth.yaml`:** `gobuster_threads`, `gobuster_timeout_seconds`,
+  `gobuster_max_seconds` (cutoff de tiempo).
+- **Cutoff de tiempo:** si Gobuster no termina antes del cutoff (default 180s), se mata
+  el proceso y se marca `failed`. Esto evita que servidores que no responden al diccionario
+  bloqueen el pipeline durante horas.
+- **TLS autofirmado:** se usa `-k` (--no-tls-validation) para evitar que Gobuster falle
+  con certificados TLS autofirmados comunes en entornos corporativos.
+- **Métodos permitidos:** en modo `dir` solo se reportan status 200, 204, 301, 307 y 403.
+
+## ⚠️ Notas
+
+- Gobuster es más intrusivo que las herramientas anteriores (genera muchas requests).
+- El modo tftp se activa solo si el probe UDP 69 detecta el puerto abierto.
+- El modo dns se activa solo si el target es un nombre de dominio (no una IP cruda).
+# `step7_gobuster.sh` — Qué hace (guía sin saber de código)
+
+## 🧩 ¿Qué es?
+
 Es el **paso 7 del pipeline**: usa la herramienta **Gobuster** para **descubrir carpetas y
 archivos "ocultos"** de los sitios web del objetivo, probando una lista de nombres típicos
 (admin, backup, .git, config, etc.).
