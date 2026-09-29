@@ -27,9 +27,9 @@ NMAP_INIT_RTT=$(awk '/^nmap_initial_rtt_timeout_ms:/ {print $2; exit}' "$WORKSPA
 NMAP_MAX_RTT=$(awk '/^nmap_max_rtt_timeout_ms:/ {print $2; exit}' "$WORKSPACE/config/stealth.yaml")
 NMAP_RETRIES="${NMAP_RETRIES:-1}"
 NMAP_INIT_RTT="${NMAP_INIT_RTT:-200}"; NMAP_MAX_RTT="${NMAP_MAX_RTT:-800}"
-# Cobertura (CLIENTE 2026-09-07): usa la lista `clienteP` desde config/stealth.yaml.
-#   - Si clienteP está definido -> nmap -p <clienteP> (98 puertos del cliente).
-#   - Si no -> fallback a --top-ports 1000 (baseline Fase 0).
+# Cobertura (POR DEFECTO --top-ports 1000). Si clienteP en stealth.yaml NO es nulo/vacío
+# se usa -p <clienteP> (ej: "22,80,443,8443"). Para usar full scan descomentar en
+# config/stealth.yaml: clienteP: 1-65535  (solo con -sS root, lento con -sT en macOS).
 # -n = sin resolución DNS (MODIFICADO PERMANENTE RUN#8 a pedido del usuario).
 CLIENTE_PORTS=$(awk '/^clienteP:/ {print $2; exit}' "$WORKSPACE/config/stealth.yaml")
 if [ -n "${CLIENTE_PORTS:-}" ]; then
@@ -37,7 +37,7 @@ if [ -n "${CLIENTE_PORTS:-}" ]; then
   PORT_LABEL="lista-clienteP ($(awk -F, '{print NF}' <<<"$CLIENTE_PORTS") puertos)"
 else
   PORT_ARGS=(--top-ports 1000)
-  PORT_LABEL="--top-ports 1000 (fallback)"
+  PORT_LABEL="--top-ports 1000 (default)"
 fi
 nmap "$SCAN" "${PORT_ARGS[@]}" -Pn -n \
   --max-retries "$NMAP_RETRIES" \
@@ -47,7 +47,6 @@ nmap "$SCAN" "${PORT_ARGS[@]}" -Pn -n \
   -oX "$EVID/nmap_ports.xml" \
   -oN "$EVID/nmap_ports.txt" \
   -oG "$EVID/nmap_ports.gnmap" \
-  "$TARGET"
-NMAP_EXIT=$?
+  "$TARGET" && NMAP_EXIT=0 || NMAP_EXIT=$?
 python3 "$WORKSPACE/scripts/xml_to_nmap_json.py" "$EVID/nmap_ports.xml" "$EVID/nmap_ports.json"
 echo "STEP1_HOST_EXIT=$NMAP_EXIT JSON_DERIVED_ok ports=$PORT_LABEL"

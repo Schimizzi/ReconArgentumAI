@@ -1,4 +1,14 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+nvd_cve_detail.py — [DEPRECATED] Reemplazado por cve_research_vulnx.py
+=============================================
+Este script ya NO se usa en el pipeline activo.
+El Agente 4 (CVE Research) ahora usa vulnx como motor principal
+(ver scripts/cve_research_vulnx.py).
+
+Se conserva solo para referencia/rollback.
+"""
 """Consulta NVD por CVE ID y printea métrica + descripción + rango de versiones MSSQL/OpenSSH."""
 import json, sys, urllib.request, urllib.parse
 

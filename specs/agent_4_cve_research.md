@@ -1,7 +1,7 @@
 # Spec operativa — Agente 4: Investigación de CVEs (Fase 2)
 
 > Instrucción operativa que el **Agente 4** lee antes de investigar CVEs.
-> Complementa: `openspec/changes/add-pentest-recon-pipeline/specs/cve-research/spec.md` (contrato formal).
+> Complementa: `openspec/changes/integrate-vulnx-cve-research/specs/cve-research/spec.md` (contrato formal).
 > `<WORKSPACE>` = raíz del proyecto. Todos los paths son relativos a `<WORKSPACE>`.
 
 ## 0. Entradas
@@ -13,30 +13,45 @@
 
 **Output:** `cve_research/<target_id>_cves.json`.
 
-## 1. Fuentes de consulta
+## 1. Fuente de consulta (PRIMARIA y ÚNICA)
 
-Para cada servicio+versión y cada tecnología web, consultar en este orden:
-1. **NVD API** — por CPE/keyword de producto + versión.
-2. **GitHub Security Advisories** — si el ecosistema aplica (libs JS/Python/Go, etc.).
-3. **Vendor bulletins / vendor advisory** — del vendor del producto.
-4. **Exploit-DB** (searchsploit o web) — para verificar PoC público.
+Para cada servicio+versión y cada tecnología web, consultar **exclusivamente**:
+
+1. **vulnx search** (motor ProjectDiscovery Cloud API) — por producto + versión.
+2. **vulnx id** — para obtener detalle completo de cada CVE (cvss_score, PoCs, referencias).
+
+**Ya no se consultan fuentes externas directas (NVD API, GitHub Security Advisories, vendor bulletins, Exploit-DB) como calls separadas.** vulnx consolida NVD, GitHub, Exploit-DB, vendor advisories, CISA KEV y más en una sola API.
 
 Reglas:
-
 - **Timeout por consulta: 30 segundos (máximo)**. Es un parámetro de la fase de investigación (no de `stealth.yaml`, que rige solo los comandos de recon) y este documento es su única fuente.
 - Fuente sin respuesta dentro de 30s → **se omite** y la búsqueda continúa con las restantes; la omisión se registra en `source_omissions[]` del output.
 - Ninguna fuente devuelve datos para un servicio → el output registra `"cves": []` con la nota `no_data_available`.
+- Si `vulnx` no está disponible en PATH, se aborta con error (no hay fallback automático a NVD directa).
 
-## 2. Filtro por severidad mínima
+## 2. Autenticación API Key (opcional)
+
+vulnx funciona sin API key pero sujeto a rate limits. Para eliminarlos:
+
+```bash
+vulnx auth  # configura la API key desde https://cloud.projectdiscovery.io
+```
+
+O mediante variable de entorno:
+
+```bash
+export PDCP_API_KEY="<tu-api-key>"
+```
+
+## 3. Filtro por severidad mínima
 
 - Solo CVEs con **CVSS ≥ 4.0**. Se descartan hallazgos informativos o de menor score.
 
-## 3. Top 3-5 por servicio con ranking estricto
+## 4. Top 3-5 por servicio con ranking estricto
 
 Cada lista de CVEs válidos (CVSS ≥ 4.0) se limita a **Top 5**; si hay menos de 3, se incluyen los que haya. El ordenamiento es ESTRICTO y en este orden exacto:
 
-1. **Exploit público verificado** (PoC verificado en GitHub o Exploit-DB) → `exploit_available: true`.
-2. **Impacto crítico de acceso** (RCE, auth bypass, deserialización, SQLi, o clase equivalente).
+1. **Exploit público verificado** (PoC verificado → `is_poc: true` en vulnx).
+2. **Impacto crítico de acceso** (RCE, auth bypass, deserialización, SQLi, o clase equivalente según `vulnerability_impact` de vulnx).
 3. **Score CVSS** descendente como desempate.
 
 > Ejemplo: un CVE 7.5 con RCE explotable públicamente se ordena ANTES que un 9.2 teórico sin exploit.
@@ -46,11 +61,11 @@ Cada CVE del output DEBE incluir el campo **`rank_reason`** documentando por qu�
 - `impacto_critico_<clase>` (ej. `impacto_critico_rce`) → entró por la regla 2.
 - `cvss_desempate` → entró por la regla 3 (o por desempate de CVSS).
 
-## 4. Cross-reference con Nuclei
+## 5. Cross-reference con Nuclei
 
-Cruzar la lista con `evidence/<target>/nuclei.json`: si Nuclei ya encontró una vulnerabilidad cuyo CVE está en la lista → marcar ese CVE como **`already_found_by_nuclei: true`**. El CVE se mantiene UNA sola vez (sin duplicados) y el Agente 5 lo sabe para no repetirlo en el informe.
+Cruzamos la lista con `evidence/<target>/nuclei.json`: si Nuclei ya encontró una vulnerabilidad cuyo CVE está en la lista → marcar ese CVE como **`already_found_by_nuclei: true`**. El CVE se mantiene UNA sola vez (sin duplicados) y el Agente 5 lo sabe para no repetirlo en el informe.
 
-## 5. Output JSON — `cve_research/<target_id>_cves.json`
+## 6. Output JSON — `cve_research/<target_id>_cves.json`
 
 ```json
 {
@@ -85,7 +100,7 @@ Cruzar la lista con `evidence/<target>/nuclei.json`: si Nuclei ya encontró una 
     {"technology": "wordpress", "version": "6.5", "cves": []}
   ],
   "source_omissions": [
-    {"service": "ssh", "source": "NVD", "reason": "timeout_30s"}
+    {"service": "ssh", "source": "vulnx", "reason": "no_data_available"}
   ],
   "summary": {
     "total_cves": 5,
@@ -102,8 +117,24 @@ Cruzar la lista con `evidence/<target>/nuclei.json`: si Nuclei ya encontró una 
 - `summary` DEBE ser consistente con los CVEs listados.
 - `version: null` + nota en `source_omissions` cuando Nmap no detectó versión precisa (solo CVEs genéricos del servicio).
 
-## 6. Prohibiciones / reglas duras
+## 7. Script de ejecución
 
-- **NUNCA inventar CVEs**: todo registro proviene de una fuente consultada (NVD/GitHub/vendor/Exploit-DB). Sin fuente → no se lista.
+Usar **`scripts/cve_research_vulnx.py`**:
+
+```bash
+python3 scripts/cve_research_vulnx.py \
+    --target-id TGT-001 \
+    --target-ip 10.0.0.1 \
+    --nmap evidence/10.0.0.1/nmap_detailed.json \
+    --whatweb evidence/10.0.0.1/whatweb.json \
+    --nuclei evidence/10.0.0.1/nuclei.json
+```
+
+Requiere `vulnx` en PATH (instalado via `go install github.com/projectdiscovery/vulnx/v2/cmd/vulnx@latest`).
+
+## 8. Prohibiciones / reglas duras
+
+- **NUNCA inventar CVEs**: todo registro proviene de `vulnx search` + `vulnx id`. Sin fuente → no se lista.
 - **`rank_reason` es obligatorio** para cada CVE del top; un CVE sin `rank_reason` invalida el output.
 - Sin versión precisa detectada por Nmap → solo CVEs genéricos del servicio, marcados en el output (no asociar CVEs de versiones específicas).
+- **Scripts DEPRECATED** (no usar en pipeline): `scripts/nvd_query.py`, `scripts/nvd_cve_detail.py`. Conservados para rollback.
