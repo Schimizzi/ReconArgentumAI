@@ -1,4 +1,14 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+nvd_query.py — [DEPRECATED] Reemplazado por cve_research_vulnx.py
+=============================================
+Este script ya NO se usa en el pipeline activo.
+El Agente 4 (CVE Research) ahora usa vulnx como motor principal
+(ver scripts/cve_research_vulnx.py).
+
+Se conserva solo para referencia/rollback.
+"""
 import json, sys, urllib.request, urllib.parse
 
 URL = "https://services.nvd.nist.gov/rest/json/cves/2.0?"

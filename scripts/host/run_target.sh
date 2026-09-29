@@ -10,13 +10,14 @@ WS="${WORKSPACE:-$(pwd)}"
 TARGET="$1"
 EVID="$WS/evidence/$TARGET"
 
-# --- R1: target en scope ----------------------------------------------------
-in_scope=0
-jq -e --arg ip "$TARGET" '.authorized_targets[] | select(.ip == $ip)' "$WS/config/scope.json" >/dev/null 2>&1 && in_scope=1
-excluded=0
-jq -e --arg ip "$TARGET" '.excluded_ips[] | select(. == $ip)' "$WS/config/scope.json" >/dev/null 2>&1 && excluded=1
-if [ "$in_scope" -eq 0 ] || [ "$excluded" -eq 1 ]; then
-  echo "❌ R1-FAIL: $TARGET no está en scope o está excluido. Abortando." >&2
+# --- R1: target en scope (validación robusta) ---------------------------------
+# Sanitize: eliminar whitespace, \r, \n, etc. que puedan colarse desde el
+# orquestador (Cline) o desde un read sin sanitizar.
+TARGET_SAN=$(printf '%s' "$TARGET" | tr -d '[:space:]' | tr -d '\r')
+in_scope=$(jq -e --arg ip "$TARGET_SAN" 'any(.authorized_targets[]; .ip == $ip)' "$WS/config/scope.json" >/dev/null 2>&1 && echo 1 || echo 0)
+excluded=$(jq -e --arg ip "$TARGET_SAN" 'any(.excluded_ips[]; . == $ip)' "$WS/config/scope.json" >/dev/null 2>&1 && echo 1 || echo 0)
+if [ "$in_scope" -ne 1 ] || [ "$excluded" -eq 1 ]; then
+  echo "❌ R1-FAIL: '$TARGET' (sanitized='$TARGET_SAN') no está en authorized_targets o está en excluded_ips. Abortando." >&2
   exit 1
 fi
 

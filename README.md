@@ -2,7 +2,7 @@
 
 > **AI-driven Pentesting** — Pipeline automatizado, multi-agente y guiado por IA para el reconocimiento y análisis de infraestructura autorizada.
 
-[![Pipeline](https://img.shields.io/badge/Pipeline-10%20Steps%20·%2011%20Tools-6f42c1)]() [![Agentes](https://img.shields.io/badge/Agentes-6-brightgreen)]() [![IA-Agnóstico](https://img.shields.io/badge/IA-Agnóstico-blue)]() [![Kali-Ready](https://img.shields.io/badge/Kali-Ready-00a859)]()
+[![Pipeline](https://img.shields.io/badge/Pipeline-10%20Steps%20·%2011%20Tools-6f42c1)]() [![Agentes](https://img.shields.io/badge/Agentes-7-brightgreen)]() [![IA-Agnóstico](https://img.shields.io/badge/IA-Agnóstico-blue)]() [![Kali-Ready](https://img.shields.io/badge/Kali-Ready-00a859)]()
 
 ReconArgentumAI es una **plataforma de pentesting de infraestructura** que orquesta un pipeline de *recon* de 10 pasos sobre 11 herramientas de seguridad, dirigido por un **modelo de IA** (agnóstico del proveedor) a través de Cline / Roo Code. El sistema **no explota nada**: produce evidencia completa en disco, planes de explotación documentados y reportes profesionales, siguiendo guardrails de scope, stealth y ofuscación inquebrantables.
 
@@ -21,6 +21,8 @@ Pensado para **red teams, auditores y equipos de seguridad ofensiva** que quiere
 - [Fase 2: Análisis](#-fase-2-análisis)
 - [Fase 3: Reporte Final](#-fase-3-reporte-final)
 - [Fase 4: Consolidación y Entregables](#-fase-4-consolidación-y-entregables)
+- [Fase 5: QA Final (Validación Determinista)](#-fase-5-qa-final-validación-determinista)
+- [Integración con Hermes Agent](#-integración-con-hermes-agent)
 - [Auditoría Manual (Hydra)](#-auditoría-manual-hydra)
 - [Workarounds Conocidos](#-workarounds-conocidos)
 - [Troubleshooting](#-troubleshooting)
@@ -34,7 +36,7 @@ Pensado para **red teams, auditores y equipos de seguridad ofensiva** que quiere
 
 | Característica | Detalle |
 |---|---|
-| 🧠 **Pipeline multi-agente guiado por IA** | 6 agentes especializados (Orchestrator, Recon, Exploitation Planner, CVE Researcher, Reporter, Consolidador de Hallazgos) coordinados por un master prompt. **Agnóstico del modelo**: funciona con Cline, Roo Code y cualquier LLM. La Fase 1 puede ejecutarse **sin LLM** en modo automático (`--auto`). |
+| 🧠 **Pipeline multi-agente guiado por IA** | 7 agentes especializados (Orchestrator, Recon, Exploitation Planner, CVE Researcher, Reporter, Consolidador de Hallazgos, QA Final) coordinados por un master prompt. **Agnóstico del modelo**: funciona con Cline, Roo Code y cualquier LLM. La Fase 1 puede ejecutarse **sin LLM** en modo automático (`--auto`). La Fase 5 (QA) es determinista, sin LLM. |
 | 🧮 **Protección de Contexto** | Los agentes miden cada archivo de evidencia (`wc -l` / `wc -c`) y **filtran dinámicamente con `jq`/`grep`** todo lo que supere **200 líneas o 50 KB** antes de ingerirlo. El crudo queda inmutable en disco. |
 | 🔒 **Ofuscación automática de credenciales** | Cualquier *password, token, API key o credencial* descubierta se redacta como `***` en los reportes. La evidencia original no se toca. |
 | 🕶️ **Sigilo dinámico (stealth)** | Delay entre herramientas (30s) y entre targets (5 min), rate-limits y timeouts parametrizados desde `config/stealth.yaml`. **Nada hardcodeado**. Adaptación automática ante WAF/tarpits (sube timeouts, baja rates). |
@@ -47,7 +49,7 @@ Pensado para **red teams, auditores y equipos de seguridad ofensiva** que quiere
 
 ## 🧩 Arquitectura Multi-Agente
 
-El pipeline se ejecuta en **5 fases orchestradas por un Orchestrator lógico** (un solo LLM con roles diferenciados), cada agente con una *spec operativa* propia en `specs/`:
+El pipeline se ejecuta en **6 fases orchestradas por un Orchestrator lógico** (un solo LLM con roles diferenciados), cada agente con una *spec operativa* propia en `specs/`:
 
 ```
 Fase 0  Calibración interactiva
@@ -55,6 +57,7 @@ Fase 1  Recon secuencial (DAG 10 steps, 11 tools)
 Fase 2  Análisis (Agente 3: plan de explotación + Agente 4: CVE research)
 Fase 3  Reporte final (Agente 5: MD + JSON)
 Fase 4  Consolidación (organize_project.py + Agente 6: resúmenes doc/txt por target)
+Fase 5  QA Final (Agente 7: 8 checks deterministas, validación pre-entrega)
 ```
 
 | Fase | Agente | Rol | Salida clave | Modo de ejecución |
@@ -66,6 +69,7 @@ Fase 4  Consolidación (organize_project.py + Agente 6: resúmenes doc/txt por t
 | **3** | 📋 **Agente 5 — Reporter** | Consolida manifests + planes + CVEs en informe dual + reportes individuales. | `reports/final_report.*` + `reports/<target_id>_report.*` | 🖥️ **Script** (`make_report.py`) |
 | **4** | 📦 **Consolidador físico** | `organize_project.py` copia evidencia a `CLIENTE/<target>/{data,outputs}/` + genera README del proyecto. | `CLIENTE/<target>/{data,outputs}/` + `CLIENTE/README.md` | 🖥️ **Script** |
 | **4** | 📝 **Agente 6 — Consolidador de Hallazgos** | Lee solo `CLIENTE/<target>/outputs/`, extrae hallazgos con **cero invención** y genera 2 entregables por target. | `_resumen_vulnerabilidades.doc` + `_resumen_breve.txt` | 🖥️ **Script** (`make_vuln_report.py`) |
+| **5** | ✅ **Agente 7 — QA Final** | Ejecuta 8 checks deterministas (integridad, consistencia, trazabilidad, ofuscación) sobre todos los artefactos. **No usa LLM.** | Salida `[PASS]/[FAIL]` por check | 🖥️ **Script** (`qa_check.py`) |
 
 > 💡 **Fase 1 automática (sin LLM):** desde la unificación 2026-09-07, el Agente 1 se ejecuta 100% sin LLM. Los scripts portables (`run_fase1_run3.sh` + `run_target.sh` + `stepN.sh`) recorren `authorized_targets`, ejecutan los 10 steps con delays, deciden estados `success / failed / skipped_*`, implementan retry 1x y generan `manifest.json`.
 
@@ -222,6 +226,40 @@ las Fases 1-4 secuencialmente.
 
 ---
 
+## 🤖 Integración con Hermes Agent
+
+ReconArgentumAI puede ejecutarse con **Hermes Agent** (framework de agentes CLI) como motor multi-agente. Los perfiles de comportamiento (SOUL) de los 4 bots del pipeline están versionados en el repo:
+
+```
+SOULs/
+├── orchestrator/    OrchestratorBot  — coordina las fases 0-5
+├── recon/           ReconBot         — Fase 1 (escaneo)
+├── analyst/         AnalystBot       — F2a (CVEs) + F2b (plan de explotación)
+└── reporter/        ReporterBot      — F3, F4 (reportes) + F5 (QA)
+```
+
+### ▶️ Instalación (una vez por máquina)
+
+```bash
+# Desde la raíz del proyecto clonado
+bash scripts/install_souls.sh
+```
+
+El script instala los 4 perfiles en `~/.hermes/bots/<agente>/SOUL.md` y **reemplaza automáticamente** la ruta del workspace original por tu ruta local. Más detalles en [`SOULs/README.md`](SOULs/README.md).
+
+### 🎛️ Orquestación con Hermes
+
+El Orchestrator delega cada fase invocando la CLI de Hermes en modo **One-Shot (`-z`)** — sin usar mecanismos de subagentes internos:
+
+```bash
+# Ejemplo de delegación de la Fase 1
+hermes --in ~/.hermes/bots/recon -z \
+  "WORKSPACE=/ruta/local/ReconArgentumAI ... ejecutá run_fase1_run3.sh ..." chat
+```
+
+> 📖 Para la secuencia completa de comandos, criterios de éxito y bloqueo, consultá [`RUNBOOK.md`](RUNBOOK.md).
+
+---
 ## 🛠️ Workarounds Conocidos
 
 | Problema | Síntoma | Workaround implementado |
@@ -383,6 +421,43 @@ python3 scripts/make_vuln_report.py --project CLIENTE
 
 ---
 
+## ✅ Fase 5: QA Final (Validación Determinista)
+
+**Propósito:** Verificación mecánica de todos los artefactos generados antes de declarar el pipeline completado. Esta fase es **100% determinista**: no usa LLM, solo un script Python con comprobaciones de sistema.
+
+### Script: `scripts/qa_check.py` — Agente 7 (QA Final)
+
+Ejecuta **8 checks** sobre los artefactos:
+
+| Check | Verifica | ¿Bloqueante? |
+|---|---|---|
+| CK-01 | `config/scope.json` tiene engagement_id y targets | Sí |
+| CK-02 | Outputs de `manifest.json` existen físicamente | Parcial |
+| CK-03 | Todos los JSONs (`evidence/`, `cve_research/`, `reports/`) parsean sin error | Sí |
+| **CK-04** | Consistencia de CVEs: `summary.total_cves` = CVEs reales, cada CVE con `id`/`cvss`/`rank_reason` | **🔴 Crítico — DETENER** |
+| CK-05 | Plan de explotación: referencias `evidence/` apuntan a archivos reales | Advertencia |
+| **CK-06** | `final_report.json` targets_count y target_ids consistentes con `scope.json` | **🔴 Crítico — DETENER** |
+| **CK-07** | Sin secretos en claro (password, token, api_key, Bearer) en reportes | **🔴 Crítico — DETENER** |
+| CK-08 | Deliverables de Fase 4 (`*_resumen_*.doc`/`.txt`) existen | Advertencia |
+
+### ▶️ Cómo se usa
+
+```bash
+# Desde la raíz del proyecto
+python3 scripts/qa_check.py
+```
+
+### ⏱️ Cuándo se ejecuta
+
+Después de la Fase 4, como última puerta de control. La ejecuta el **ReporterBot** (Agente 5). Si pasa todo, el Orchestrator emite "PIPELINE COMPLETADO". Si falla un check crítico, el pipeline se detiene.
+
+### 📥 Entrada / 📤 Salida
+
+- **Entrada:** `config/scope.json`, `evidence/*/`, `cve_research/*/`, `reports/*`, `plans/*`
+- **Salida:** consola con `[PASS]/[FAIL]` por check + resumen numérico
+- **Exit code:** 0 (todo OK) / 1 (hay FAILs)
+---
+
 ## 🔐 Auditoría Manual — Hydra
 
 **Fuera del pipeline.** Bajo demanda del analista.
@@ -427,6 +502,7 @@ ReconArgentumAI/
 │   ├── host/                         # Pipeline Fase 1 (steps 1-10, run_target, etc.)
 │   ├── organize_project.py           # ⭐ Consolidación
 │   ├── make_vuln_report.py           # ⭐ Agente 6
+│   ├── qa_check.py                   # ⭐ Agente 7 (QA Final)
 │   ├── hydra_audit.sh / cleanup_engagement.sh / install_host_tools.sh
 │   └── nvd_query.py / cves_md.py / check_gobuster_urls.sh …
 ├── evidence/                         # Evidencia cruda por target
