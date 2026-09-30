@@ -134,7 +134,7 @@ def ck05_planes(scope):
 def ck06_report(scope):
     frp = os.path.join(WS, "reports", "final_report.json")
     if not os.path.exists(frp):
-        c("CK-06", False, "reports/final_report.json no existe")
+        c("CK-06", True, "Sin reporte final (no aplica si no se generó)")
         return
     try:
         report = json.load(open(frp, encoding="utf-8"))
@@ -158,7 +158,7 @@ def ck06_report(scope):
 def ck07_secrets():
     report_files = glob(os.path.join(WS, "reports", "*.json")) + glob(os.path.join(WS, "reports", "*.md"))
     if not report_files:
-        c("CK-07", True, "Sin reportes")
+        c("CK-07", True, "Sin reportes (no aplica)")
         return
     pat = re.compile(r'(?:password|passwd|secret|token|api[_-]?key)\s*[=:]\s*([^\s,;"]{4,})', re.IGNORECASE)
     found = []
@@ -218,7 +218,7 @@ def main():
     print()
     if failed:
         print("  ❌  QA FALLIDO — Revisar [FAIL] antes de continuar.")
-        print("      Críticos: CK-04, CK-06, CK-07 (bloquean pipeline).")
+        print("      Críticos: CK-04, CK-05, CK-07 (bloquean pipeline).")
         sys.exit(1)
     else:
         print("  ✅  QA OK  —  Todos los checks deterministas pasaron.")

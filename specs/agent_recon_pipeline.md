@@ -2,8 +2,8 @@
 
 > Instrucción operativa que el **Orchestrator** lee ANTES de ejecutar la Fase 1.
 > Complementa: `openspec/changes/add-pentest-recon-pipeline/specs/recon-pipeline/spec.md` (contrato formal),
-> `.cline/master_prompt.md` (rol y guardrails) y `config/approved_commands.md` (única fuente de comandos).
-> `<WORKSPACE>` = raíz del proyecto. Todos los paths son relativos a `<WORKSPACE>` (ver master_prompt.md §0).
+> `SOULs/orchestrator/SOUL.md` (rol y guardrails R1-R5) y `config/approved_commands.md` (única fuente de comandos).
+> `<WORKSPACE>` = raíz del proyecto. Todos los paths son relativos a `<WORKSPACE>` (ver `SOULs/orchestrator/SOUL.md` §Constantes).
 
 ## 0. Regla de Separación de Fases (Fase 0 vs Fase 1)
 
@@ -67,7 +67,7 @@
 - **Step 7:** cutoff de Gobuster: si no responde al diccionario, el runner corta tras `gobuster_max_seconds` (default 180s). Flag `-k` (no-tls-validation) para certificados autofirmados. Wordlists portables (`/opt/SecLists` → `~/Documents/SecLists` → `tools/seclists_common.txt`).
 - **Step 8:** workaround Bash 3.2 (macOS) para arrays vacíos en SSLyze: `"${ARGS[@]+"${ARGS[@]}"}"`.
 
-Orden SIEMPRE lineal `1→2→3→…→10`, sin paralelismo (R3 del master_prompt).
+Orden SIEMPRE lineal `1→2→3→…→10`, sin paralelismo (R3 — ver `SOULs/orchestrator/SOUL.md`).
 
 ## 2. Reglas transversales (aplican a TODOS los steps)
 

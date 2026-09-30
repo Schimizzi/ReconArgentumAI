@@ -79,9 +79,19 @@ else
   done
   [ "${#TARGETS[@]}" -gt 0 ] || { echo "Sin authorized_targets en scope.json"; fail=1; }
 fi
-LOCKS=$(ls -d "$WS"/evidence/*/.run.lock 2>/dev/null | wc -l | tr -d ' ')
-if [ "$LOCKS" -gt 0 ]; then
-  echo "  WARN $LOCKS lock(s) activos en evidence/*/.run.lock (R3)"
+LOCKS=()
+while IFS= read -r _lk; do
+  # Stale detection: lock con mas de 30 min se limpia automaticamente
+  if [ -n "$(find "$_lk" -mmin +30 -type d 2>/dev/null)" ]; then
+    echo "  STALE $_lk (>30 min) → limpiando..."
+    rm -rf "$_lk"
+  else
+    LOCKS+=("$_lk")
+  fi
+done < <(ls -d "$WS"/evidence/*/.run.lock 2>/dev/null || true)
+if [ "${#LOCKS[@]}" -gt 0 ]; then
+  echo "  WARN ${#LOCKS[@]} lock(s) activos en evidence/*/.run.lock (R3):"
+  for _lk in "${LOCKS[@]}"; do echo "    - $_lk"; done
 fi
 if [ "$fail" -eq 0 ]; then
   echo "===[ Preflight: OK ]==="

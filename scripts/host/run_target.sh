@@ -28,8 +28,20 @@ mkdir -p "$EVID"
 # evidencia nikto. mkdir es atómico: si el lock ya existe, la 2ª instancia aborta.
 LOCKDIR="$EVID/.run.lock"
 if ! mkdir "$LOCKDIR" 2>/dev/null; then
-  echo "❌ R3-FAIL ($(date +%H:%M:%S)): otro pipeline está corriendo sobre $TARGET. Abortando (lock $LOCKDIR)." >&2
-  exit 1
+  # R3-STALE (2026-09-29): si el lock tiene mas de 30 min, se asume stale
+  # y se limpia automaticamente. El pipeline completo (10 steps) no deberia
+  # tomar mas de ~15-20 min; 30 min es un margen seguro.
+  if [ -d "$LOCKDIR" ] && [ -n "$(find "$LOCKDIR" -mmin +30 -type d 2>/dev/null)" ]; then
+    echo "⚠️  R3-STALE ($(date +%H:%M:%S)): lock ${LOCKDIR} tiene mas de 30 min (stale). Limpiando..." >&2
+    rm -rf "$LOCKDIR"
+    mkdir "$LOCKDIR" || {
+      echo "❌ R3-FAIL ($(date +%H:%M:%S)): no se pudo crear lock incluso tras cleanup stale." >&2
+      exit 1
+    }
+  else
+    echo "❌ R3-FAIL ($(date +%H:%M:%S)): otro pipeline esta corriendo sobre $TARGET. Abortando (lock $LOCKDIR)." >&2
+    exit 1
+  fi
 fi
 trap 'rm -rf "$LOCKDIR"' EXIT
 

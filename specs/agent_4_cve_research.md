@@ -63,7 +63,7 @@ Cada CVE del output DEBE incluir el campo **`rank_reason`** documentando por qu�
 
 ## 5. Cross-reference con Nuclei
 
-Cruzamos la lista con `evidence/<target>/nuclei.json`: si Nuclei ya encontró una vulnerabilidad cuyo CVE está en la lista → marcar ese CVE como **`already_found_by_nuclei: true`**. El CVE se mantiene UNA sola vez (sin duplicados) y el Agente 5 lo sabe para no repetirlo en el informe.
+Cruzamos la lista con `evidence/<target>/nuclei.json`: si Nuclei ya encontró una vulnerabilidad cuyo CVE está en la lista → marcar ese CVE como **`already_found_by_nuclei: true`**. El CVE se mantiene UNA sola vez (sin duplicados) para que no se repita en los resúmenes por target.
 
 ## 6. Output JSON — `cve_research/<target_id>_cves.json`
 

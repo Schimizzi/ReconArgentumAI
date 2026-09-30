@@ -11,7 +11,6 @@ Estructura de salida (bajo <WORKSPACE>/<PROYECTO>/):
     <TARGET_IP>/
       data/                                    <- documentos consolidados (nombres ORIGINALES, en Markdown)
         <target_id>_exploitation_plan.md       <- copia de plans/
-        <target_id>_report.md                  <- copia de reports/
       outputs/                                 <- evidencia cruda (nombres ORIGINALES)
         nmap_detailed.xml, httpx.json, nuclei.json,
         nikto_*, gobuster_*, sslyze_*, ...     <- copias de evidence/<ip>/
@@ -20,9 +19,8 @@ Ningun archivo existente se renombra: todas las copias preservan su nombre tal
 como lo creo el escaneo. Solo se copia UNA evidencia por escaneo: si una tool
 genera varios formatos del mismo scan (ej. nmap_detailed.xml/.txt/.json), se
 copia el mas completo (.xml). Quedan fuera del consolidado: `nmap_ports.*`
-(Step 1, solo descubre puertos), `manifest.json`, `open_ports.txt`
-`web_endpoints.txt` (intermedios) y `<target_id>_report.json` (duplicado del
-.md). Los logs de ejecucion `_step.log`/`_errors.log` SI se consolidan (van a
+(Step 1, solo descubre puertos), `manifest.json`, `open_ports.txt` y
+`web_endpoints.txt` (intermedios). Los logs de ejecucion `_step.log`/`_errors.log` SI se consolidan (van a
 `outputs/` como evidencia de la corrida). El UNICO archivo nuevo es
 README.md (por proyecto).
 
@@ -38,7 +36,7 @@ Uso:
 - --no-clobber: no sobrescribe archivos ya existentes en el destino.
 
 El target_id se toma del manifest.json (el id real usado en plans/
-cve_research/reports), con fallback a config/scope.json y luego a la IP pura.
+cve_research), con fallback a config/scope.json y luego a la IP pura.
 """
 import argparse
 import glob
@@ -222,7 +220,7 @@ def _es_evidencia_excluida(name):
     if re.fullmatch(r"nmap_ports\..+", name):
         return True  # Step 1 solo descubre puertos; el detalle real es Step 3
     if re.fullmatch(r".+_report\.json", name):
-        return True  # duplicado del <target_id>_report.md copiado en data/
+        return True  # duplicado del <target_id>_report.md legacy copiado en data/
     return False
 
 
@@ -404,13 +402,15 @@ def procesar_target(ip, project_name, project_dir, scope, dry_run, no_clobber):
     # data/: plan.md + report.md se copian tal cual. El <target_id>_report.json
     # NO se copia (duplicado del .md) y el JSON de cve_research NO se renderiza
     # a <target_id>_cves.md (solo se usa para contar CVEs en el README).
+    # El report.md es OPCIONAL/legacy: el generador de reportes fue eliminado
+    # del pipeline, asi que su ausencia NO se reporta como warning.
     for nombre, src, carpeta in (
         ("plan", plan_src, data_dir_out),
         ("report.md", report_md_src, data_dir_out),
     ):
         if src:
             copiar(src, os.path.join(carpeta, os.path.basename(src)), dry_run, no_clobber)
-        else:
+        elif nombre == "plan":
             warn(f"no se encontró {nombre} para {ip}")
 
     # 3) Estadisticas para el README
@@ -464,7 +464,7 @@ def build_readme(project_name, infos):
     )
     L.append("")
     L.append("### Estructura por target")
-    L.append("- `data/` → `<target_id>_exploitation_plan.md` + `<target_id>_report.md` — los 2 en Markdown.")
+    L.append("- `data/` → `<target_id>_exploitation_plan.md` (plan de explotación) y, si existe de corridas previas al pipeline actual, `<target_id>_report.md` (legacy).")
     L.append("- `outputs/` → UNA evidencia por escaneo (nmap solo el `.xml`, sin duplicados).")
     L.append("")
     L.append("> ⚠️ Contiene datos sensibles del engagement — no publicar.")

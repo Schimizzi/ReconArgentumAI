@@ -4,7 +4,7 @@
 # actual y deja el repo limpio listo para el próximo cliente.
 #
 # QUÉ LIMPIA:
-#   evidence/  reports/  plans/  cve_research/  logs/  CLIENTE/   (y outputs/
+#   evidence/  plans/  cve_research/  logs/  CLIENTE/   (y outputs/
 #   en la raíz, si existe)                                    -> se eliminan
 #   config/approved_commands.md                              -> se elimina
 #   config/scope.json                                        -> se restaura
@@ -94,7 +94,6 @@ add_candidato() {
 }
 
 add_candidato "$WS/evidence"           "evidence/  — evidencia cruda del recon (Fase 1)"
-add_candidato "$WS/reports"            "reports/  — informes finales (Agente 5, Fase 3)"
 add_candidato "$WS/plans"              "plans/  — planes de explotación (Agente 3, Fase 2)"
 add_candidato "$WS/cve_research"       "cve_research/  — investigación CVEs (Agente 4, Fase 2)"
 add_candidato "$WS/logs"               "logs/  — bitácoras de ejecución (Fase 1)"
@@ -225,10 +224,10 @@ fi
 # 5. Recrear carpetas vacías (por defecto) y resumen final
 # ---------------------------------------------------------------------------
 if [ "$NO_RECREATE" -eq 0 ]; then
-  for d in evidence reports plans cve_research logs CLIENTE; do
+  for d in evidence plans cve_research logs CLIENTE; do
     mkdir -p "$WS/$d"
   done
-  echo "   📁 Carpetas vacías recreadas: evidence/ reports/ plans/ cve_research/ logs/ CLIENTE/"
+  echo "   📁 Carpetas vacías recreadas: evidence/ plans/ cve_research/ logs/ CLIENTE/"
 else
   echo "   ⏭️  --no-recreate: no se recrearon las carpetas vacías"
 fi

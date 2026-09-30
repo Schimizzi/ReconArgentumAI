@@ -41,7 +41,13 @@
 # ---------------------------------------------------------------------------
 
 # Master prompt del Orchestrator y skills (metodología operativa interna).
-/.cline/
+# El real (.cline/master_prompt.md) queda LOCAL: puede acumular paths/IPs del
+# entorno del analista. Se versiona SOLO la plantilla, que usa placeholders
+# (<WORKSPACE>, <target>, <IP>) y no contiene datos del engagement.
+# Uso: cp .cline/master_prompt.md.template .cline/master_prompt.md
+#      (scripts/install_souls.sh también lo crea automáticamente si falta)
+/.cline/*
+!/.cline/master_prompt.md.template
 
 # Workflows locales del agente (config de la sesión Cline/Roo, no código fuente).
 /.clinerules/

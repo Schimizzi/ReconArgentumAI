@@ -38,7 +38,7 @@ bash scripts/cleanup_engagement.sh --force
 
 ## 📥 Entrada / 📤 Salida
 
-- **Entrada:** las carpetas con datos del cliente — `evidence/`, `reports/`, `plans/`,
+- **Entrada:** las carpetas con datos del cliente — `evidence/`, `plans/`,
   `cve_research/`, `logs/`, `CLIENTE/` (y `outputs/` en la raíz si existe), además de
   `config/approved_commands.md` y `config/scope.json`.
 - **Salida:** proyecto limpio, con las carpetas de trabajo vacías listas para el próximo cliente

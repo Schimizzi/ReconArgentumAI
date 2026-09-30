@@ -42,9 +42,9 @@ El script no requiere argumentos. Escanea automáticamente los directorios del p
 | CK-02 | Por cada target autorizado, los outputs listados en `manifest.json` existen en disco | Parcial — si un target tiene outputs faltantes, se salta |
 | CK-03 | Todos los JSON de evidencia, CVEs y reportes parsean correctamente | Sí |
 | CK-04 | En cada `*_cves.json`: `summary.total_cves` coincide con los CVEs listados, y cada CVE tiene `id`, `cvss_score` y `rank_reason` | **🔴 Crítico** — inconsistencia = reporte inválido |
-| CK-05 | Cada `*_exploitation_plan.md` contiene referencias a archivos `evidence/...` que existen | Advertencia — se continúa |
-| CK-06 | `reports/final_report.json` tiene los mismos target_ids que `scope.json` y `summary.targets_count` es correcto | **🔴 Crítico** — reporte inconsistente |
-| CK-07 | Ningún reporte contiene `password=`, `token=`, `secret=`, `api_key=` o `Bearer ` con valor en claro (todo ofuscado con `***`) | **🔴 Crítico** — fuga de datos |
+| CK-05 | Cada `*_exploitation_plan.md` contiene referencias a archivos `evidence/...` que existen | **🔴 Crítico** — plan inválido si refs rotas |
+| CK-06 | `reports/final_report.json` tiene los mismos target_ids que `scope.json` y `summary.targets_count` es correcto (si existe) | Informativo — si no hay reporte, PASS automático |
+| CK-07 | Ningún reporte contiene `password=`, `token=`, `secret=`, `api_key=` o `Bearer ` con valor en claro (todo ofuscado con `***`) | Informativo — si no hay reportes, PASS automático |
 | CK-08 | Existen archivos `*_resumen_vulnerabilidades.doc` y `*_resumen_breve.txt` de la Fase 4 | Advertencia — puede no aplicar si no se corrió F4 |
 
 ## ⚠️ Notas
@@ -52,4 +52,4 @@ El script no requiere argumentos. Escanea automáticamente los directorios del p
 - **No modifica ningún archivo.** Es 100% de solo lectura.
 - **No requiere conexión externa.** Funciona completamente offline.
 - **No depende de ningún LLM.** Es Python puro + expresiones regulares.
-- Los checks CK-04, CK-06 y CK-07 son **bloqueantes**: si fallan, el pipeline debe detenerse. Los demás son informativos o permiten continuar con advertencia.
+- Los checks CK-04, CK-05 y CK-07 son **bloqueantes**: si fallan, el pipeline debe detenerse. Los demás (CK-06, CK-08) son informativos o permiten continuar con advertencia.

@@ -63,12 +63,18 @@ Para cada `cve_research/<id>_cves.json`, el QA SHALL: (1) verificar que `summary
 - **WHEN** todos los checks de consistencia pasan
 - **THEN** `[PASS] CK-04`
 
-### Requirement: CK-05 — Trazabilidad del plan de explotación
+### Requirement: CK-05 — Trazabilidad del plan de explotación (crítico, bloqueante)
 
 El QA SHALL leer cada `plans/*_exploitation_plan.md`, extraer referencias a `evidence/` mediante regex, y verificar que existan en disco.
 
 #### Scenario: Plan con referencias rotas
 - **WHEN** hay refs a archivos inexistentes
+- **THEN** `[FAIL] CK-05` **BLOQUEANTE** → pipeline DETENIDO
+
+#### Scenario: Plan sin refs o sin planes
+- **WHEN** el plan no tiene referencias a `evidence/` o no hay planes generados
+- **THEN** `[PASS] CK-05`
+
 ### Requirement: CK-07 — Ausencia de secretos en claro (crítico, bloqueante)
 
 El QA SHALL aplicar regex sobre `reports/*.json` y `reports/*.md` para detectar `password=`, `passwd=`, `secret=`, `token=`, `api_key=`, `Bearer `. Si el valor capturado NO contiene `***`, FAIL.
@@ -105,20 +111,15 @@ El QA SHALL ser 100% de solo lectura. NO crea, modifica, mueve ni elimina ningú
 #### Scenario: Ejecución sin efectos secundarios
 - **WHEN** el script se ejecuta
 - **THEN** ningún archivo del workspace cambia
-- **THEN** `[FAIL] CK-05` (no bloqueante, canal continua)
 
-#### Scenario: Plan sin refs o sin planes
-- **WHEN** no hay referencias o no hay planes
-- **THEN** `[PASS] CK-05`
+### Requirement: CK-06 — Consistencia del reporte final (informativo)
 
-### Requirement: CK-06 — Consistencia del reporte final (crítico, bloqueante)
+El QA SHALL verificar que `reports/final_report.json` exista y si existe, que `summary.targets_count` == len(targets[]), y targets[].ids coinciden con authorized_targets[].id del scope. Si el archivo no existe, PASS automático (el generador de reportes fue eliminado del pipeline).
 
-El QA SHALL verificar que `reports/final_report.json`: `summary.targets_count` == len(targets[]), y targets[].ids coinciden con authorized_targets[].id del scope.
+#### Scenario: Sin reporte (no aplica)
+- **WHEN** `reports/final_report.json` no existe
+- **THEN** `[PASS] CK-06` (no aplica, el generador de reportes fue eliminado del pipeline)
 
 #### Scenario: Inconsistencia
 - **WHEN** targets_count no coincide o hay IDs extraños/faltantes
-- **THEN** `[FAIL] CK-06` **BLOQUEANTE** → pipeline DETENIDO
-
-#### Scenario: Reporte consistente
-- **WHEN** targets_count coincide y target_ids son subconjunto de scope
-- **THEN** `[PASS] CK-06`
+- **THEN** `[FAIL] CK-06` (informativo, no bloqueante) — el pipeline continúa
