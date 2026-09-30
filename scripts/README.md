@@ -49,7 +49,6 @@ Cada `.md` que acompaña a un script explica, sin código:
 |---|---|---|
 | `run_fase1_run3.sh` | Recorre todos los objetivos autorizados y los escanea uno por uno | [▶ run_fase1_run3.md](host/run_fase1_run3.md) |
 | `run_target.sh` | Director del escaneo de un solo objetivo (10 pasos) | [▶ run_target.md](host/run_target.md) |
-| `make_report.py` | Genera el informe final + informe por objetivo (Agente 5) | [▶ make_report.md](host/make_report.md) |
 | `detect_tls_ports.py` | Detecta qué puertos usan cifrado TLS (para SSLyze) | [▶ detect_tls_ports.md](host/detect_tls_ports.md) |
 | `step9_iis_shortname_scan.py` | Detecta y enumera IIS Short File Name Disclosure (8.3) — integrado como Step 9, con modo manual `--proyecto CLIENTE` intacto | [▶ step9_iis_shortname_scan.md](host/step9_iis_shortname_scan.md) |
 | `step10_smbclient_enum.sh` | Enumeración anónima (null session) de recursos SMB (139/445) — integrado como Step 10, con modo manual `--all` intacto | [▶ step10_smbclient_enum.md](host/step10_smbclient_enum.md) |

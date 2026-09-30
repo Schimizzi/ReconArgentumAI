@@ -2,7 +2,7 @@
 
 > **AI-driven Pentesting** — Pipeline automatizado, multi-agente y guiado por IA para el reconocimiento y análisis de infraestructura autorizada.
 
-[![Pipeline](https://img.shields.io/badge/Pipeline-10%20Steps%20·%2011%20Tools-6f42c1)]() [![Agentes](https://img.shields.io/badge/Agentes-7-brightgreen)]() [![IA-Agnóstico](https://img.shields.io/badge/IA-Agnóstico-blue)]() [![Kali-Ready](https://img.shields.io/badge/Kali-Ready-00a859)]()
+[![Pipeline](https://img.shields.io/badge/Pipeline-10%20Steps%20·%2011%20Tools-6f42c1)]() [![Agentes](https://img.shields.io/badge/Agentes-6-brightgreen)]() [![IA-Agnóstico](https://img.shields.io/badge/IA-Agnóstico-blue)]() [![Kali-Ready](https://img.shields.io/badge/Kali-Ready-00a859)]()
 
 ReconArgentumAI es una **plataforma de pentesting de infraestructura** que orquesta un pipeline de *recon* de 10 pasos sobre 11 herramientas de seguridad, dirigido por un **modelo de IA** (agnóstico del proveedor) a través de Cline / Roo Code. El sistema **no explota nada**: produce evidencia completa en disco, planes de explotación documentados y reportes profesionales, siguiendo guardrails de scope, stealth y ofuscación inquebrantables.
 
@@ -19,7 +19,6 @@ Pensado para **red teams, auditores y equipos de seguridad ofensiva** que quiere
 - [Modos de Ejecución](#-modos-de-ejecución)
 - [Fase 1: Pipeline de Recon (10 Steps)](#-fase-1-pipeline-de-recon-10-steps)
 - [Fase 2: Análisis](#-fase-2-análisis)
-- [Fase 3: Reporte Final](#-fase-3-reporte-final)
 - [Fase 4: Consolidación y Entregables](#-fase-4-consolidación-y-entregables)
 - [Fase 5: QA Final (Validación Determinista)](#-fase-5-qa-final-validación-determinista)
 - [Integración con Hermes Agent](#-integración-con-hermes-agent)
@@ -36,14 +35,14 @@ Pensado para **red teams, auditores y equipos de seguridad ofensiva** que quiere
 
 | Característica | Detalle |
 |---|---|
-| 🧠 **Pipeline multi-agente guiado por IA** | 7 agentes especializados (Orchestrator, Recon, Exploitation Planner, CVE Researcher, Reporter, Consolidador de Hallazgos, QA Final) coordinados por un master prompt. **Agnóstico del modelo**: funciona con Cline, Roo Code y cualquier LLM. La Fase 1 puede ejecutarse **sin LLM** en modo automático (`--auto`). La Fase 5 (QA) es determinista, sin LLM. |
+| 🧠 **Pipeline multi-agente guiado por IA** | 6 agentes especializados (Orchestrator, Recon, Exploitation Planner, CVE Researcher, Consolidador de Hallazgos, QA Final) coordinados por un master prompt. **Agnóstico del modelo**: funciona con Cline, Roo Code y cualquier LLM. La Fase 1 puede ejecutarse **sin LLM** en modo automático (`--auto`). La Fase 5 (QA) es determinista, sin LLM. |
 | 🧮 **Protección de Contexto** | Los agentes miden cada archivo de evidencia (`wc -l` / `wc -c`) y **filtran dinámicamente con `jq`/`grep`** todo lo que supere **200 líneas o 50 KB** antes de ingerirlo. El crudo queda inmutable en disco. |
 | 🔒 **Ofuscación automática de credenciales** | Cualquier *password, token, API key o credencial* descubierta se redacta como `***` en los reportes. La evidencia original no se toca. |
 | 🕶️ **Sigilo dinámico (stealth)** | Delay entre herramientas (30s) y entre targets (5 min), rate-limits y timeouts parametrizados desde `config/stealth.yaml`. **Nada hardcodeado**. Adaptación automática ante WAF/tarpits (sube timeouts, baja rates). |
 | 🎯 **Ranking inteligente de CVEs** | Top 3-5 CVEs por servicio con orden estricto: **exploit público verificado > impacto crítico (RCE/auth-bypass/SQLi) > CVSS**. Cada CVE con `rank_reason` documentado. |
 | 📦 **Tres modos de ejecución** | **Docker** (contenedor Kali, para Internet), **Host** (macOS nativo, para LAN local) y **VM Kali** (nativa). Todos comparten el mismo set de scripts portables. |
 | 🤖 **Fase 1 automática sin LLM** | El Agente 1 se ejecuta con `run_docker.sh --auto` o `run_host.sh → run_fase1_run3.sh` sin necesidad de un modelo de lenguaje. Estados `success / failed / skipped_*`, retry 1x y delays desde configuración. |
-| ✅ **Informe dual + individual** | `final_report.md`/`.json` consolidado + `reports/<target_id>_report.md`/`.json` por target, todos con JSON validado y paths absolutos de trazabilidad. |
+| ✅ **Entregables consolidados por target** | `organize_project.py` ordena la evidencia en `CLIENTE/<target>/` (planes + outputs) y `make_vuln_report.py` (Agente 6) genera `<target_id>_resumen_vulnerabilidades.doc` + `<target_id>_resumen_breve.txt`, todos con paths absolutos de trazabilidad. |
 
 ---
 
@@ -55,7 +54,6 @@ El pipeline se ejecuta en **6 fases orchestradas por un Orchestrator lógico** (
 Fase 0  Calibración interactiva
 Fase 1  Recon secuencial (DAG 10 steps, 11 tools)
 Fase 2  Análisis (Agente 3: plan de explotación + Agente 4: CVE research)
-Fase 3  Reporte final (Agente 5: MD + JSON)
 Fase 4  Consolidación (organize_project.py + Agente 6: resúmenes doc/txt por target)
 Fase 5  QA Final (Agente 7: 8 checks deterministas, validación pre-entrega)
 ```
@@ -66,7 +64,6 @@ Fase 5  QA Final (Agente 7: 8 checks deterministas, validación pre-entrega)
 | **1** | 🔍 **Recon Agent** | Ejecuta el DAG lineal de 10 steps (Nmap → HTTPX → Nmap -sC -sV → Nuclei → Nikto → WhatWeb → Gobuster → SSLyze → IIS Shortname → SMB Enum) con delays stealth, service-based routing y retry 1x. | `evidence/<target>/` + `manifest.json` | 🤖 **LLM / Automático sin LLM** (`--auto`) |
 | **2** | 🧠 **Agente 3 — Exploitation Planner** | Correlaciona evidencia por servicio con **protección de contexto** y redacta vectores accionables. **Nunca ejecuta exploits.** | `plans/<target_id>_exploitation_plan.md` | 🧠 **Solo LLM** |
 | **2** | 🔬 **Agente 4 — CVE Researcher** | Consulta NVD / Exploit-DB, filtra CVSS ≥ 4.0 y rankea Top 3-5 por servicio con `rank_reason`. | `cve_research/<target_id>_cves.json` | 🧠 **Solo LLM** |
-| **3** | 📋 **Agente 5 — Reporter** | Consolida manifests + planes + CVEs en informe dual + reportes individuales. | `reports/final_report.*` + `reports/<target_id>_report.*` | 🖥️ **Script** (`make_report.py`) |
 | **4** | 📦 **Consolidador físico** | `organize_project.py` copia evidencia a `CLIENTE/<target>/{data,outputs}/` + genera README del proyecto. | `CLIENTE/<target>/{data,outputs}/` + `CLIENTE/README.md` | 🖥️ **Script** |
 | **4** | 📝 **Agente 6 — Consolidador de Hallazgos** | Lee solo `CLIENTE/<target>/outputs/`, extrae hallazgos con **cero invención** y genera 2 entregables por target. | `_resumen_vulnerabilidades.doc` + `_resumen_breve.txt` | 🖥️ **Script** (`make_vuln_report.py`) |
 | **5** | ✅ **Agente 7 — QA Final** | Ejecuta 8 checks deterministas (integridad, consistencia, trazabilidad, ofuscación) sobre todos los artefactos. **No usa LLM.** | Salida `[PASS]/[FAIL]` por check | 🖥️ **Script** (`qa_check.py`) |
@@ -79,6 +76,8 @@ Fase 5  QA Final (Agente 7: 8 checks deterministas, validación pre-entrega)
 - **R3 Secuencial estricto** — una herramienta a la vez, con delays (`delay_between_tools_seconds` y `delay_between_targets_minutes` desde `stealth.yaml`).
 - **R4 Evidencia completa** — outputs íntegros e inmutables en disco.
 - **R5 Stealth** — todo rate/timeout/thread sale de `config/stealth.yaml`. Nada hardcodeado.
+
+> 🛡️ **Definición canónica:** flujo **Hermes** → [`SOULs/orchestrator/SOUL.md`](SOULs/orchestrator/SOUL.md) § *GUARDRAILS INQUEBRANTABLES (R1-R5)*. Flujo **Cline/Roo Code** → [`.cline/master_prompt.md.template`](.cline/master_prompt.md.template) §2.
 
 ---
 
@@ -123,9 +122,14 @@ bash scripts/host/preflight_run.sh
 
 ```bash
 # 1. Abrir Cline en el workspace
-# 2. Verificar config/scope.json con targets autorizados
-# 3. Prompt: "Iniciá la Fase 1 del pipeline en MODO DOCKER" (o MODO HOST)
+# 2. Crear el master prompt local desde la plantilla versionada (una vez)
+cp .cline/master_prompt.md.template .cline/master_prompt.md
+# 3. Verificar config/scope.json con targets autorizados
+# 4. Prompt: "Iniciá la Fase 1 del pipeline en MODO DOCKER" (o MODO HOST)
 ```
+
+> 📄 `.cline/master_prompt.md` es **local** (`.gitignore`): la versión publicada es la
+> plantilla sanitizada `.cline/master_prompt.md.template`, sin IPs ni paths del analista.
 
 ---
 
@@ -203,9 +207,14 @@ bash scripts/host/run_target.sh 10.10.0.10
 
 Cada target ejecuta el DAG de 10 steps con delays de stealth, retry 1x y `skipped_*` automático según servicio detectado. La evidencia queda en `evidence/<target>/` + `manifest.json`.
 
-### 3) Fase 0 interactiva + Fases 2-4 (con LLM)
+### 3) Fase 0 interactiva + Fases 2-5 (con LLM)
 
 Abrí Cline en la raíz del workspace y usá este prompt (o equivalente):
+
+```bash
+# Solo la primera vez: el master prompt real es local y se crea desde la plantilla
+cp .cline/master_prompt.md.template .cline/master_prompt.md
+```
 
 ```text
 Leé el archivo .cline/master_prompt.md y asumí el rol de Orchestrator
@@ -213,13 +222,13 @@ de este pipeline de pentest. Iniciá la Fase 0 (calibración interactiva)
 de las herramientas según el scope definido en config/scope.json. Cuando tengas los
 comandos aprobados, ejecutá la Fase 1 contra los targets del alcance y
 continuá con la Fase 2 (Agente 3: plan de explotación + Agente 4: CVE
-research), la Fase 3 (Agente 5: reporte final) y la Fase 4 (consolidación
-en CLIENTE/ + Agente 6: resúmenes por target). Respetá SIEMPRE los
+research), la Fase 4 (consolidación en CLIENTE/ + Agente 6: resúmenes por
+target) y la Fase 5 (QA determinista). Respetá SIEMPRE los
 guardrails R1-R5.
 ```
 
 El Orchestrator te guiará: **aprobás o modificás** cada comando (Fase 0), y luego ejecutás
-las Fases 1-4 secuencialmente.
+las Fases 1-5 secuencialmente.
 
 > 💡 Si solo te interesa la **evidencia del recon** (Fase 1), el paso **2)** con el runner
 > automático es todo lo que necesitás — sin LLM.
@@ -235,7 +244,7 @@ SOULs/
 ├── orchestrator/    OrchestratorBot  — coordina las fases 0-5
 ├── recon/           ReconBot         — Fase 1 (escaneo)
 ├── analyst/         AnalystBot       — F2a (CVEs) + F2b (plan de explotación)
-└── reporter/        ReporterBot      — F3, F4 (reportes) + F5 (QA)
+└── reporter/        ReporterBot      — F4 (consolidación) + F5 (QA)
 ```
 
 ### ▶️ Instalación (una vez por máquina)
@@ -245,16 +254,19 @@ SOULs/
 bash scripts/install_souls.sh
 ```
 
-El script instala los 4 perfiles en `~/.hermes/bots/<agente>/SOUL.md` y **reemplaza automáticamente** la ruta del workspace original por tu ruta local. Más detalles en [`SOULs/README.md`](SOULs/README.md).
+El script crea **4 perfiles Hermes** (`orchestrator`, `recon`, `analyst`, `reporter`) en `~/.hermes/profiles/` con sus respectivos SOUL.md como system prompt.
 
 ### 🎛️ Orquestación con Hermes
 
-El Orchestrator delega cada fase invocando la CLI de Hermes en modo **One-Shot (`-z`)** — sin usar mecanismos de subagentes internos:
+El Orchestrator delega cada fase invocando la CLI de Hermes con el flag `-p <perfil>` (y **no** `--in`, que solo cambia el directorio de trabajo):
 
 ```bash
-# Ejemplo de delegación de la Fase 1
-hermes --in ~/.hermes/bots/recon -z \
+# Ejemplo: delegar Fase 1 al ReconBot
+hermes -p recon -z \
   "WORKSPACE=/ruta/local/ReconArgentumAI ... ejecutá run_fase1_run3.sh ..." chat
+
+# El perfil 'recon' ya carga automáticamente el SOUL.md como system prompt
+# con la identidad ReconBot y las reglas de ReconArgentumAI.
 ```
 
 > 📖 Para la secuencia completa de comandos, criterios de éxito y bloqueo, consultá [`RUNBOOK.md`](RUNBOOK.md).
@@ -359,23 +371,6 @@ Salida: `cve_research/<target_id>_cves.json`
 
 Scripts auxiliares: `scripts/nvd_query.py`, `scripts/nvd_cve_detail.py`, `scripts/cves_md.py`.
 
-## 📊 Fase 3: Reporte Final — Agente 5
-
-> Spec: `specs/agent_5_reporter.md`
-
-`scripts/host/make_report.py` lee la evidencia de todos los targets y genera:
-
-```bash
-python3 scripts/host/make_report.py
-```
-
-| Archivo | Contenido |
-|---|---|
-| `reports/final_report.md` + `.json` | Informe consolidado: portada, resumen, metodología, sección por target, matriz de riesgo, ofuscación `***` |
-| `reports/<target_id>_report.md` + `.json` | Informe individual con paths absolutos |
-
-Reglas: trazabilidad absoluta, ofuscación de credenciales, JSON validado, escala CVSS.
-
 ---
 
 ## 📦 Fase 4: Consolidación y Entregables
@@ -433,10 +428,10 @@ Ejecuta **8 checks** sobre los artefactos:
 |---|---|---|
 | CK-01 | `config/scope.json` tiene engagement_id y targets | Sí |
 | CK-02 | Outputs de `manifest.json` existen físicamente | Parcial |
-| CK-03 | Todos los JSONs (`evidence/`, `cve_research/`, `reports/`) parsean sin error | Sí |
+| CK-03 | Todos los JSONs (`evidence/`, `cve_research/`) parsean sin error | Sí |
 | **CK-04** | Consistencia de CVEs: `summary.total_cves` = CVEs reales, cada CVE con `id`/`cvss`/`rank_reason` | **🔴 Crítico — DETENER** |
-| CK-05 | Plan de explotación: referencias `evidence/` apuntan a archivos reales | Advertencia |
-| **CK-06** | `final_report.json` targets_count y target_ids consistentes con `scope.json` | **🔴 Crítico — DETENER** |
+| **CK-05** | Plan de explotación: referencias `evidence/` apuntan a archivos reales | **🔴 Crítico — DETENER** |
+| CK-06 | Consistencia del reporte final (solo si `reports/final_report.json` existe; si no existe, PASS automático) | Informativo |
 | **CK-07** | Sin secretos en claro (password, token, api_key, Bearer) en reportes | **🔴 Crítico — DETENER** |
 | CK-08 | Deliverables de Fase 4 (`*_resumen_*.doc`/`.txt`) existen | Advertencia |
 
@@ -449,11 +444,11 @@ python3 scripts/qa_check.py
 
 ### ⏱️ Cuándo se ejecuta
 
-Después de la Fase 4, como última puerta de control. La ejecuta el **ReporterBot** (Agente 5). Si pasa todo, el Orchestrator emite "PIPELINE COMPLETADO". Si falla un check crítico, el pipeline se detiene.
+Después de la Fase 4, como última puerta de control. La ejecuta el **ReporterBot**. Si pasa todo, el Orchestrator emite "PIPELINE COMPLETADO". Si falla un check crítico (CK-04, CK-05 o CK-07), el pipeline se detiene.
 
 ### 📥 Entrada / 📤 Salida
 
-- **Entrada:** `config/scope.json`, `evidence/*/`, `cve_research/*/`, `reports/*`, `plans/*`
+- **Entrada:** `config/scope.json`, `evidence/*/`, `cve_research/*/`, `plans/*`
 - **Salida:** consola con `[PASS]/[FAIL]` por check + resumen numérico
 - **Exit code:** 0 (todo OK) / 1 (hay FAILs)
 ---
@@ -483,7 +478,8 @@ bash scripts/hydra_audit.sh 10.10.0.10 ssh -L users.txt -P pass.txt   # wordlist
 ```
 ReconArgentumAI/
 ├── .cline/
-│   └── master_prompt.md              # Rol Orchestrator + guardrails R1-R5
+│   ├── master_prompt.md.template     # ⭐ Rol Orchestrator + guardrails R1-R5 (plantilla versionada)
+│   └── master_prompt.md              # Copia local (gitignored): cp …template → …md
 ├── .clinerules/workflows/            # Workflows OpenSpec
 ├── config/
 │   ├── scope.json                    # ⭐ Alcance autorizado
@@ -508,7 +504,6 @@ ReconArgentumAI/
 ├── evidence/                         # Evidencia cruda por target
 ├── plans/                            # Planes de explotación
 ├── cve_research/                     # CVEs rankeados
-├── reports/                          # Informes finales
 ├── logs/                             # Logs de ejecución
 ├── CLIENTE/                          # ⭐ Consolidación (gitignored)
 ├── Dockerfile                        # Kali + 11 tools + SecLists

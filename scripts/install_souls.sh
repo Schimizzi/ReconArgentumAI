@@ -1,77 +1,95 @@
 #!/bin/bash
 # =============================================================================
-# install_souls.sh — Instala los perfiles Hermes (SOUL) de ReconArgentumAI
+# install_souls.sh — Instala perfiles Hermes para ReconArgentumAI
 # -----------------------------------------------------------------------------
-# Copia SOULs/{orchestrator,recon,analyst,reporter}/SOUL.md a
-# ~/.hermes/bots/<agente>/SOUL.md reemplazando el WORKSPACE original del autor
-# por el directorio actual del proyecto clonado.
+# Crea perfiles Hermes dedicados (orchestrator, recon, analyst, reporter),
+# instala su SOUL.md reemplazando el WORKSPACE original del autor por la
+# ruta local del proyecto clonado.
 #
-# El repositorio original se mantiene INTACTO. Solo se instalan copias.
+# El repositorio original se mantiene INTACTO. Solo se modifican los perfiles.
 #
+# Requiere: Hermes Agent instalado (hermes CLI en PATH)
 # Uso: bash scripts/install_souls.sh
 # =============================================================================
 set -u
 
-# --- Detectar WORKSPACE: raíz del proyecto (directorio padre de scripts/) -----
 WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# Ruta absoluta original incrustada en los SOULs (la del autor en el repo)
 ORIG_WS="/Users/claudio/Recon_Workspace/ReconArgentumAI"
-HERMES_BOTS="$HOME/.hermes/bots"
-
 AGENTS=(orchestrator recon analyst reporter)
 
 log() { echo "[install_souls] $*"; }
 
 # --- Pre-checks ---------------------------------------------------------------
-[ -d "$WS/SOULs" ] || { echo "❌ No encuentro SOULs/ en $WS. ¿Ejecutás desde la raíz del repo?"; exit 1; }
-[ -d "$HERMES_BOTS" ] || mkdir -p "$HERMES_BOTS"
+[ -d "$WS/SOULs" ] || { echo "❌ No encuentro SOULs/ en $WS."; exit 1; }
+command -v hermes >/dev/null 2>&1 || { echo "❌ hermes no está en PATH."; exit 1; }
 
-log "WORKSPACE detectado: $WS"
-log "Hermes bots dir:    $HERMES_BOTS"
-if [ "$WS" != "$ORIG_WS" ]; then
-    log "Ruta original del repo ($ORIG_WS) será reemplazada por: $WS"
-else
-    log "La ruta coincide con la original. No hay reemplazo necesario."
-fi
+log "WORKSPACE: $WS"
 echo
 
-# --- Instalar cada perfil -----------------------------------------------------
-FAIL=0
+# --- Crear/actualizar perfiles ------------------------------------------------
 for agent in "${AGENTS[@]}"; do
+    log "📦 Procesando perfil '$agent'..."
+
+    if [ ! -d "$HOME/.hermes/profiles/$agent" ]; then
+        hermes profile create "$agent" --clone --no-alias 2>&1 | sed 's/^/   /'
+        if [ $? -ne 0 ]; then
+            log "❌ Error creando perfil '$agent'."
+            continue
+        fi
+        log "   Perfil '$agent' creado."
+    else
+        log "   Perfil '$agent' ya existe. Actualizando SOUL.md..."
+    fi
+
     src="$WS/SOULs/$agent/SOUL.md"
-    dst="$HERMES_BOTS/$agent/SOUL.md"
+    dst="$HOME/.hermes/profiles/$agent/SOUL.md"
 
     if [ ! -f "$src" ]; then
-        log "❌ Falta el SOUL de '$agent': $src"
-        FAIL=1
+        log "❌ Falta SOUL.md de '$agent': $src"
         continue
     fi
 
-    mkdir -p "$HERMES_BOTS/$agent"
-
     if [ "$WS" = "$ORIG_WS" ]; then
-        # Misma ruta que el autor original: copia directa (no hay nada que reemplazar)
         cp "$src" "$dst"
-        log "✅ '$agent' instalado → $dst (ruta original coincide con la local)"
+        log "✅ '$agent': instalado (ruta local coincide con la del autor)"
     else
-        # Reemplazo de la ruta original por la local (solo en la copia instalada)
         sed "s|$ORIG_WS|$WS|g" "$src" > "$dst"
         if grep -q "$ORIG_WS" "$dst"; then
-            # Si aún queda la ruta original, algo quedó sin tokenizar
-            log "⚠️  '$agent': la copia instalada aún contiene la ruta original (¿hay yaml con \\$WS?)"
+            log "⚠️  '$agent': la copia aún tiene la ruta original"
         else
-            log "✅ '$agent' instalado → $dst (ruta reemplazada a $WS)"
+            log "✅ '$agent': instalado (ruta reemplazada a $WS)"
         fi
     fi
 done
-echo
 
-# --- Resumen final ------------------------------------------------------------
-if [ "$FAIL" -eq 0 ]; then
-    log "✅ Perfiles installados. Probar con:"
-    log "   hermes --in ~/.hermes/bots/recon -z \"IDIOMA: ESPAÑOL. ¿Cuál es tu rol?\" chat"
-    exit 0
+# --- Master prompt del Orchestrator (flujo Cline / Roo Code) -------------------
+# La copia de trabajo (.cline/master_prompt.md) es LOCAL (.gitignore); se crea
+# desde la plantilla versionada y sanitizada.
+MP_SRC="$WS/.cline/master_prompt.md.template"
+MP_DST="$WS/.cline/master_prompt.md"
+if [ -f "$MP_SRC" ]; then
+    if [ ! -f "$MP_DST" ]; then
+        cp "$MP_SRC" "$MP_DST"
+        log "✅ master_prompt.md creado desde la plantilla (flujo Cline/Roo Code)"
+    else
+        log "ℹ️  master_prompt.md ya existe — no se sobrescribe"
+    fi
 else
-    log "❌ Hubo errores. Revisá los mensajes anteriores."
-    exit 1
+    log "⚠️  Falta $MP_SRC — el flujo Cline/Roo Code no tendrá master prompt"
 fi
+
+# --- Resumen ------------------------------------------------------------------
+echo
+log "═══════════════════════════════════════════════════════"
+log "  Instalación completada."
+log ""
+log "  Perfiles:"
+log "    hermes -p orchestrator   — Orquestador del pipeline"
+log "    hermes -p recon          — Fase 1 (escaneo)"
+log "    hermes -p analyst        — Fase 2 (CVEs + plan explot.)"
+log "    hermes -p reporter       — Fase 4-5 (consolidación + QA)"
+log ""
+log "  Prueba: hermes -p recon -z '¿Cuál es tu rol?' chat"
+log ""
+log "  Master prompt (Cline/Roo): .cline/master_prompt.md"
+log "═══════════════════════════════════════════════════════"

@@ -1,17 +1,8 @@
-# Reporting Specification
-
-## Purpose
-
-Define el Agente 5 reporter: consolida la evidencia de todos los targets, los planes de explotación y el CVE research en un informe final dual — Markdown legible por humanos (PDF-ready) y JSON machine-readable válido — con matriz de riesgo global, recomendaciones ordenadas por prioridad y redacción de datos sensibles.
-
-## Requirements
-
-### Requirement: Informe final dual
-El Agente 5 SHALL generar dos archivos: `reports/final_report.md` (informe humano, renderizable como PDF) y `reports/final_report.json` (machine-readable), consolidando evidencia, planes de explotación y CVEs de todos los targets del engagement.
-
-#### Scenario: Engagement con múltiples targets
-- **WHEN** el pipeline completó 2 targets
-- **THEN** ambos informes incluyen una sección por target y un resumen global que cubre los dos
+# Reporting Specification — OBSOLETE (Agente 5 eliminado)
+#
+# Este spec definía al Agente 5 (Reporter) que generaba informes finales.
+# El paso de generación de reportes fue eliminado del pipeline.
+# Para generar informes, revisar manualmente los outputs en evidence/ y CLIENTE/.
 
 ### Requirement: Informes individuales por target
 El Agente 5 SHALL generar, además del informe unificado, un reporte individual por cada target del engagement: `reports/<target_id>_report.md` y `reports/<target_id>_report.json`. El reporte individual SHALL contener únicamente la información pertinente a ese target (servicios, vulnerabilidades, CVEs, plan de explotación y configuración), sin secciones globales de otros targets.
