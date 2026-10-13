@@ -3,7 +3,8 @@
 """
 cve_research_vulnx.py — Agente 4 (CVE Research) usando vulnx como motor principal.
 
-Reemplaza a nvd_query.py y nvd_cve_detail.py (ambos marcados como DEPRECATED).
+Reemplaza a los antiguos nvd_query.py y nvd_cve_detail.py (eliminados del repo en
+la migración a vulnx; recuperables desde el historial git si hicieran falta).
 Usa el CLI `vulnx` de ProjectDiscovery para buscar CVEs por producto+versión
 y obtener detalles completos de cada CVE.
 

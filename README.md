@@ -63,7 +63,7 @@ Fase 5  QA Final (Agente 7: 8 checks deterministas, validación pre-entrega)
 | **0** | 🎛️ **Orchestrator** | Calibra las herramientas con el usuario (contexto de defensas, puertos, wordlists) y registra solo comandos aprobados. | `config/approved_commands.md` | 🤖 **LLM / Manual** |
 | **1** | 🔍 **Recon Agent** | Ejecuta el DAG lineal de 10 steps (Nmap → HTTPX → Nmap -sC -sV → Nuclei → Nikto → WhatWeb → Gobuster → SSLyze → IIS Shortname → SMB Enum) con delays stealth, service-based routing y retry 1x. | `evidence/<target>/` + `manifest.json` | 🤖 **LLM / Automático sin LLM** (`--auto`) |
 | **2** | 🧠 **Agente 3 — Exploitation Planner** | Correlaciona evidencia por servicio con **protección de contexto** y redacta vectores accionables. **Nunca ejecuta exploits.** | `plans/<target_id>_exploitation_plan.md` | 🧠 **Solo LLM** |
-| **2** | 🔬 **Agente 4 — CVE Researcher** | Consulta NVD / Exploit-DB, filtra CVSS ≥ 4.0 y rankea Top 3-5 por servicio con `rank_reason`. | `cve_research/<target_id>_cves.json` | 🧠 **Solo LLM** |
+| **2** | 🔬 **Agente 4 — CVE Researcher** | Consulta **vulnx** (ProjectDiscovery, fuente única: NVD + Exploit-DB + advisories + CISA KEV), filtra CVSS ≥ 4.0 y rankea Top 3-5 por servicio con `rank_reason`. | `cve_research/<target_id>_cves.json` | 🧠 **Solo LLM** |
 | **4** | 📦 **Consolidador físico** | `organize_project.py` copia evidencia a `CLIENTE/<target>/{data,outputs}/` + genera README del proyecto. | `CLIENTE/<target>/{data,outputs}/` + `CLIENTE/README.md` | 🖥️ **Script** |
 | **4** | 📝 **Agente 6 — Consolidador de Hallazgos** | Lee solo `CLIENTE/<target>/outputs/`, extrae hallazgos con **cero invención** y genera 2 entregables por target. | `_resumen_vulnerabilidades.doc` + `_resumen_breve.txt` | 🖥️ **Script** (`make_vuln_report.py`) |
 | **5** | ✅ **Agente 7 — QA Final** | Ejecuta 8 checks deterministas (integridad, consistencia, trazabilidad, ofuscación) sobre todos los artefactos. **No usa LLM.** | Salida `[PASS]/[FAIL]` por check | 🖥️ **Script** (`qa_check.py`) |
@@ -365,11 +365,11 @@ Salida: `plans/<target_id>_exploitation_plan.md`
 
 > Spec: `specs/agent_4_cve_research.md`
 
-Busca CVEs en NVD / Exploit-DB / Packet Storm para los servicios detectados. Filtra CVSS ≥ 4.0 y rankea Top 3-5 por servicio con `rank_reason`.
+Consulta **vulnx** (ProjectDiscovery) como fuente única para los servicios y tecnologías web detectados: consolida NVD, Exploit-DB, GitHub advisories, vendor bulletins y CISA KEV en una sola API. Filtra CVSS ≥ 4.0 y rankea Top 3-5 por servicio con `rank_reason`.
 
 Salida: `cve_research/<target_id>_cves.json`
 
-Scripts auxiliares: `scripts/nvd_query.py`, `scripts/nvd_cve_detail.py`, `scripts/cves_md.py`.
+Script de ejecución: `scripts/cve_research_vulnx.py`. Utilidad auxiliar: `scripts/cves_md.py`.
 
 ---
 
@@ -500,7 +500,7 @@ ReconArgentumAI/
 │   ├── make_vuln_report.py           # ⭐ Agente 6
 │   ├── qa_check.py                   # ⭐ Agente 7 (QA Final)
 │   ├── hydra_audit.sh / cleanup_engagement.sh / install_host_tools.sh
-│   └── nvd_query.py / cves_md.py / check_gobuster_urls.sh …
+│   └── cve_research_vulnx.py / cves_md.py / check_gobuster_urls.sh …
 ├── evidence/                         # Evidencia cruda por target
 ├── plans/                            # Planes de explotación
 ├── cve_research/                     # CVEs rankeados

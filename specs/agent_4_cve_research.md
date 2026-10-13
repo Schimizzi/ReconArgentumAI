@@ -137,4 +137,4 @@ Requiere `vulnx` en PATH (instalado via `go install github.com/projectdiscovery/
 - **NUNCA inventar CVEs**: todo registro proviene de `vulnx search` + `vulnx id`. Sin fuente → no se lista.
 - **`rank_reason` es obligatorio** para cada CVE del top; un CVE sin `rank_reason` invalida el output.
 - Sin versión precisa detectada por Nmap → solo CVEs genéricos del servicio, marcados en el output (no asociar CVEs de versiones específicas).
-- **Scripts DEPRECATED** (no usar en pipeline): `scripts/nvd_query.py`, `scripts/nvd_cve_detail.py`. Conservados para rollback.
+- **Scripts NVD antiguos eliminados**: `scripts/nvd_query.py` y `scripts/nvd_cve_detail.py` fueron removidos del repo (el Agente 4 usa **solo** `vulnx`). Si alguna vez se necesitara consultar la NVD directa, quedan recuperables desde el historial git (`git show 10fbd1c:scripts/nvd_query.py`).

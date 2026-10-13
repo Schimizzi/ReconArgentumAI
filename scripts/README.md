@@ -36,8 +36,7 @@ Cada `.md` que acompaña a un script explica, sin código:
 | `install_host_tools.sh` | Instala las herramientas de pentest en la Mac (una sola vez) | [▶ install_host_tools.md](install_host_tools.md) |
 | `xml_to_nmap_json.py` | Convierte el XML de Nmap a JSON | [▶ xml_to_nmap_json.md](xml_to_nmap_json.md) |
 | `cves_md.py` | Convierte la investigación CVE a un documento legible | [▶ cves_md.md](cves_md.md) |
-| `nvd_query.py` | Busca vulnerabilidades conocidas (CVE) por palabra clave | [▶ nvd_query.md](nvd_query.md) |
-| `nvd_cve_detail.py` | Trae el detalle de un CVE específico | [▶ nvd_cve_detail.md](nvd_cve_detail.md) |
+| `cve_research_vulnx.py` | Investiga CVEs de cada servicio/tecnología con `vulnx` (Agente 4, Fase 2) | [▶ cve_research_vulnx.md](cve_research_vulnx.md) |
 | `organize_project.py` | Ordena y consolida toda la evidencia en la carpeta del cliente | [▶ organize_project.md](organize_project.md) |
 | `make_vuln_report.py` | Genera los informes de vulnerabilidades (Agente 6) — acumula corridas con horario | [▶ make_vuln_report.md](make_vuln_report.md) |
 | `hydra_audit.sh` | Auditoría **manual** de credenciales débiles con Hydra (por target o `--all`) — fuera del pipeline, con límite de intentos y log central | [▶ hydra_audit.md](hydra_audit.md) |
