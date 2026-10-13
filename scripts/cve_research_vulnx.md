@@ -56,8 +56,9 @@ export PDCP_API_KEY="<tu-api-key>"   # se obtiene en https://cloud.projectdiscov
   - `evidence/<target>/nmap_detailed.json` → servicios y versiones.
   - `evidence/<target>/whatweb.json` → tecnologías web (opcional).
   - `evidence/<target>/nuclei.json` → CVEs ya detectados por Nuclei (opcional).
-- **Salida:** `cve_research/<target_id>_cves.json` — el mismo formato que ya esperan
-  `scripts/host/make_report.py` (Agente 5) y `scripts/organize_project.py` (Agente 6):
+- **Salida:** `cve_research/<target_id>_cves.json` — el mismo formato que ya consumen
+  `scripts/organize_project.py` (Fase 4 — consolidación) y `scripts/qa_check.py`
+  (Fase 5 — chequeo determinista CK-04, validación de CVEs):
   - `services_analyzed` → CVEs por servicio (con su `port`).
   - `web_technologies` → CVEs por tecnología web.
   - `source_omissions` → servicios que quedaron sin datos.

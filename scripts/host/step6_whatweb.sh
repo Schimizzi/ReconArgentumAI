@@ -18,4 +18,12 @@ rm -f "$EVID/whatweb.json"   # WhatWeb --log-json es append-only; limpiar antes
   --open-timeout 10 \
   --read-timeout 20 \
   --max-threads 5
+WW_RC=$?
+# FIX 2026-10-13: antes el script terminaba SIEMPRE con exit 0 (echo final), así que
+# run_target.sh marcaba whatweb=success aunque WhatWeb fallara (ej. gem 'addressable'
+# ausente) y no generara whatweb.json. Ahora propaga el exit code real.
+if [ "$WW_RC" -ne 0 ] || [ ! -s "$EVID/whatweb.json" ]; then
+  echo "STEP6_HOST_FAIL (whatweb rc=$WW_RC, json $([ -s "$EVID/whatweb.json" ] && echo ok || echo ausente))"
+  exit 1
+fi
 echo "STEP6_HOST_OK (binario: $WWBIN)"
