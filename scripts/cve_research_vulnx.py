@@ -33,6 +33,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -42,6 +43,8 @@ from typing import Any
 # ---------------------------------------------------------------------------
 VULNX_BIN = "vulnx"
 VULNX_TIMEOUT = 30
+VULNX_ATTEMPTS = 3          # reintentos por consulta (sin API key vulnx puede rate-limitar)
+VULNX_RETRY_DELAY = 4       # segundos de espera entre reintentos
 SEARCH_LIMIT = 20
 TOP_N_MAX = 5
 CVSS_MIN = 4.0
@@ -55,6 +58,15 @@ IMPACTO_CRITICO_KEYWORDS = {
 }
 
 SEVERITY_MAP = [(9.0, "CRITICAL"), (7.0, "HIGH"), (4.0, "MEDIUM"), (0.0, "LOW")]
+
+# Plugins de WhatWeb que NO son tecnologías (metadata/pseudo-plugins del fingerprint).
+# Buscarlos en vulnx genera FALSOS POSITIVOS (ej. "Country" → CVEs de un plugin de
+# WooCommerce, "IP"/"Title"/"Script" → ruido). Se excluyen del CVE research.
+WHATWEB_NON_TECH_PLUGINS = {
+    "ip", "country", "title", "htmltitle", "script", "html5", "redirectlocation",
+    "uncommonheaders", "httpserver", "cookies", "headers", "email", "frame",
+    "object", "passwordfield", "comment",
+}
 
 
 def _severity_label(score: float | None) -> str:
@@ -70,34 +82,52 @@ def _severity_label(score: float | None) -> str:
 # Helpers de shell
 # ---------------------------------------------------------------------------
 
-def _run_vulnx(args: list[str], timeout: int = VULNX_TIMEOUT) -> dict | list | None:
+def _run_vulnx(args: list[str], timeout: int = VULNX_TIMEOUT,
+               attempts: int = VULNX_ATTEMPTS) -> dict | list | None:
+    """Ejecuta vulnx y devuelve el JSON parseado.
+
+    Reintenta `attempts` veces: sin PDCP_API_KEY la API de ProjectDiscovery puede
+    responder vacío/error de forma intermitente y antes esto producía un output con
+    0 CVEs sin ninguna señal de fallo. Nota: vulnx imprime banner + [INF] en STDERR,
+    así que stdout sigue siendo JSON limpio.
+    """
     cmd = [VULNX_BIN] + args
-    try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        return None
-    except FileNotFoundError:
-        print("  \u26a0\ufe0f  vulnx no encontrado en PATH. Instalar: go install "
-              "github.com/projectdiscovery/vulnx/v2/cmd/vulnx@latest", file=sys.stderr)
-        return None
-    except Exception as e:
-        print(f"  \u26a0\ufe0f  Error ejecutando vulnx: {e}", file=sys.stderr)
-        return None
-    if proc.returncode != 0:
-        return None
-    try:
-        return json.loads(proc.stdout)
-    except json.JSONDecodeError:
-        return None
+    last_err = "sin respuesta"
+    for attempt in range(1, attempts + 1):
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            last_err = f"timeout >{timeout}s"
+        except FileNotFoundError:
+            print("  \u26a0\ufe0f  vulnx no encontrado en PATH. Instalar: go install "
+                  "github.com/projectdiscovery/vulnx/v2/cmd/vulnx@latest", file=sys.stderr)
+            return None
+        except Exception as e:
+            last_err = str(e)
+        else:
+            if proc.returncode == 0:
+                try:
+                    return json.loads(proc.stdout)
+                except json.JSONDecodeError:
+                    last_err = "stdout no es JSON"
+            else:
+                err_lines = [ln for ln in (proc.stderr or "").splitlines() if ln.strip()]
+                last_err = err_lines[-1] if err_lines else f"rc={proc.returncode}"
+        if attempt < attempts:
+            time.sleep(VULNX_RETRY_DELAY)
+    print(f"  \u26a0\ufe0f  vulnx sin datos tras {attempts} intentos ({last_err}). "
+          f"Posible rate limit \u2192 export\u00e1 PDCP_API_KEY.", file=sys.stderr)
+    return None
 
 
-def _search_vulns(product: str, version: str | None = None) -> list[dict]:
+def _search_vulns(product: str, version: str | None = None) -> list[dict] | None:
+    """Devuelve la lista de resultados, o None si la consulta FALLÓ (≠ lista vacía)."""
     query = product
     if version and version not in ("unknown", "", "none"):
         query = f"{product} {version}"
     data = _run_vulnx(["search", query, "--json", "--limit", str(SEARCH_LIMIT)])
     if data is None:
-        return []
+        return None
     return data.get("results") or []
 
 
@@ -277,6 +307,8 @@ def _load_whatweb(whatweb_path: str | None) -> list[dict]:
         plugins = entry.get("plugins") if isinstance(data, list) else entry
         if isinstance(plugins, dict):
             for tech_name, tech_info in plugins.items():
+                if tech_name.lower() in WHATWEB_NON_TECH_PLUGINS:
+                    continue  # metadata de WhatWeb, no una tecnología
                 version = ""
                 if isinstance(tech_info, dict):
                     vl = tech_info.get("version") or []
@@ -296,19 +328,22 @@ def _load_whatweb(whatweb_path: str | None) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def _investigate_service(name: str, version: str, port: int,
-                          nuclei_cves: set[str], is_web: bool = False) -> dict:
+                          nuclei_cves: set[str],
+                          is_web: bool = False) -> tuple[dict, bool]:
+    """Devuelve (resultado, query_failed); query_failed=True si vulnx no respondió."""
+    base = {"technology": name, "version": version or None, "cves": []} if is_web \
+           else {"service": name, "version": version or None, "port": port, "cves": []}
+
     results = _search_vulns(name, version)
+    if results is None:              # fallo de consulta (timeout / rate limit)
+        return base, True
     if not results:
-        base = {"technology": name, "version": version or None, "cves": []} if is_web \
-               else {"service": name, "version": version or None, "port": port, "cves": []}
-        return base
+        return base, False
 
     valid = [r for r in results
              if isinstance(r.get("cvss_score"), (int, float)) and r["cvss_score"] >= CVSS_MIN]
     if not valid:
-        base = {"technology": name, "version": version or None, "cves": []} if is_web \
-               else {"service": name, "version": version or None, "port": port, "cves": []}
-        return base
+        return base, False
 
     cve_ids = [r["cve_id"] for r in valid if r.get("cve_id")]
     details = _get_cve_details(cve_ids)
@@ -326,26 +361,37 @@ def _investigate_service(name: str, version: str, port: int,
     top_cves = ranked[:TOP_N_MAX]
 
     if is_web:
-        return {"technology": name, "version": version or None, "cves": top_cves}
-    return {"service": name, "version": version or None, "port": port, "cves": top_cves}
+        return {"technology": name, "version": version or None, "cves": top_cves}, False
+    return {"service": name, "version": version or None, "port": port, "cves": top_cves}, False
 
 
 def _collect_omissions(services_analyzed: list[dict],
-                        web_analyzed: list[dict]) -> list[dict]:
+                        web_analyzed: list[dict],
+                        failed_services: list[str] | None = None,
+                        failed_web: list[str] | None = None) -> list[dict]:
+    """Registra por qué un servicio quedó sin CVEs.
+
+    reason=query_failed   → vulnx no respondió (rate limit/timeout) → revisar
+    reason=no_data_available → vulnx respondió sin CVEs para ese producto
+    """
+    failed_services = failed_services or []
+    failed_web = failed_web or []
     omissions = []
     for s in services_analyzed:
         if not s.get("cves"):
+            name = s.get("service", "?")
             omissions.append({
-                "service": s.get("service", "?"),
+                "service": name,
                 "source": "vulnx",
-                "reason": "no_data_available",
+                "reason": "query_failed" if name in failed_services else "no_data_available",
             })
     for w in web_analyzed:
         if not w.get("cves"):
+            key = f"web/{w.get('technology', '?')}"
             omissions.append({
-                "service": f"web/{w.get('technology', '?')}",
+                "service": key,
                 "source": "vulnx",
-                "reason": "no_data_available",
+                "reason": "query_failed" if key in failed_web else "no_data_available",
             })
     return omissions
 
@@ -363,21 +409,30 @@ def process_target(target_id: str, target_ip: str,
     nuclei_cves = _load_nuclei_cves(nuclei_path)
 
     services_analyzed = []
+    failed_services = []
     for svc in services:
         print(f"  \U0001f50d {svc['name']} (port {svc['port']}, v{svc['version']})...",
               end=" ", flush=True)
-        r = _investigate_service(svc["name"], svc["version"], svc["port"], nuclei_cves)
+        r, failed = _investigate_service(svc["name"], svc["version"], svc["port"], nuclei_cves)
         services_analyzed.append(r)
-        print(f"{len(r.get('cves', []))} CVEs")
+        if failed:
+            failed_services.append(r.get("service", svc["name"]))
+        print(f"{'ERROR de consulta' if failed else str(len(r.get('cves', []))) + ' CVEs'}")
 
     web_analyzed = []
+    failed_web = []
     for wt in web_technologies:
         print(f"  \U0001f310 web/{wt['technology']} (v{wt['version']})...",
               end=" ", flush=True)
-        r = _investigate_service(wt["technology"], wt["version"], 0,
-                                  nuclei_cves, is_web=True)
+        r, failed = _investigate_service(wt["technology"], wt["version"], 0,
+                                          nuclei_cves, is_web=True)
         web_analyzed.append(r)
-        print(f"{len(r.get('cves', []))} CVEs")
+        if failed:
+            failed_web.append(f"web/{r.get('technology', wt['technology'])}")
+        print(f"{'ERROR de consulta' if failed else str(len(r.get('cves', []))) + ' CVEs'}")
+    if failed_services or failed_web:
+        print(f"  \u26a0\ufe0f  {len(failed_services) + len(failed_web)} consulta(s) fallaron "
+              f"(ver source_omissions[].reason=query_failed)", file=sys.stderr)
 
     all_cves = []
     for s in services_analyzed:
@@ -394,7 +449,8 @@ def process_target(target_id: str, target_ip: str,
         "research_timestamp": datetime.now(timezone.utc).isoformat(),
         "services_analyzed": services_analyzed,
         "web_technologies": web_analyzed,
-        "source_omissions": _collect_omissions(services_analyzed, web_analyzed),
+        "source_omissions": _collect_omissions(services_analyzed, web_analyzed,
+                                                failed_services, failed_web),
         "summary": {
             "total_cves": len(all_cves),
             "critical": sev_count("CRITICAL"),
