@@ -15,8 +15,8 @@ proyecto en la migración a `vulnx` (recuperables desde el historial de git si h
 
 En la **Fase 2 (Análisis)**, cuando ya existe la evidencia de un objetivo escaneado
 (`nmap_detailed.json` y, si hay web, `whatweb.json` + `nuclei.json`). Se ejecuta **una vez por
-objetivo** y deja el resultado listo para que lo lean el Agente 5 (informes) y el Agente 6
-(resúmenes por target). Necesita **internet** (consulta la nube de ProjectDiscovery).
+objetivo** y deja el resultado listo para que lo consuman el Agente 6 (entregables `.doc`/`.txt`
+por target) y la Fase 5 (QA determinista, check CK-04). Necesita **internet** (consulta la nube de ProjectDiscovery).
 
 ## ▶️ Cómo se usa
 
