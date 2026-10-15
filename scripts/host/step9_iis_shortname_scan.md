@@ -1,9 +1,18 @@
-# step9_iis_shortname_scan — IIS Short File Name Disclosure (8.3)
+# `step9_iis_shortname_scan.py` — Qué hace (guía sin saber de código)
+
+## 🧩 ¿Qué es?
 
 Detección y enumeración de **IIS Short File Name Disclosure** (divulgación de
 nombres cortos 8.3 de Windows, también llamada *IIS tilde enumeration*,
-CVE-2007-5418) sobre las URLs identificadas como Microsoft-IIS en los outputs
-de Gobuster del repositorio.
+CVE-2007-5418) sobre las URLs identificadas como Microsoft-IIS en los sitios del
+objetivo (la firma IIS se toma de `gobuster_evidence.txt` en modo manual, o del
+campo `webserver` de `httpx.json` en modo pipeline).
+
+## ⏱️ ¿Cuándo se usa?
+
+Lo llama `run_target.sh` en el **Step 9** (después de SSLyze), **solo si** hay web
+(`web_on`) y el `httpx.json` del Step 2 reporta `Server: Microsoft-IIS`; si no, queda
+`skipped_no_iis`. También se puede correr a mano bajo demanda sobre `CLIENTE/`.
 
 ## Vulnerabilidad
 
@@ -71,12 +80,30 @@ el analista puede validar manualmente.
 
 ## Descubrimiento de URLs objetivo
 
-El script **lee los `gobuster_evidence.txt` de los targets** y toma solo las
-URLs cuyo servidor es IIS:
+El script tiene **dos modos** y el descubrimiento de sitios IIS depende de cuál
+se use:
+
+### Modo manual (`CLIENTE/`, default)
+
+Lee los `gobuster_evidence.txt` de los targets y toma solo las URLs cuyo
+servidor es IIS:
 
 1. `CLIENTE/<IP>_*/outputs/gobuster_evidence.txt` — líneas
    `VERSIONS<TAB>URL<TAB>Server: Microsoft-IIS/...` ⇒ sitios base IIS.
 2. `CLIENTE/<IP>_*/outputs/gobuster_<port>.txt` del mismo puerto — paths con
+   `(Status: 301|302|307|308|403)` ⇒ directorios de cada sitio a escanear.
+
+Es el flujo histórico, bajo demanda: requiere que `check_gobuster_urls.sh` haya
+generado antes el `gobuster_evidence.txt`.
+
+### Modo pipeline (`--ev-dir`, lo usa `run_target.sh` en el Step 9)
+
+Apunta directo a `evidence/<IP>/` y descubre IIS **sin** `gobuster_evidence.txt`
+(que en el pipeline todavía no existe):
+
+1. `evidence/<IP>/httpx.json` — líneas cuyo campo `webserver` contiene
+   `IIS` / `Microsoft-IIS` (firma del Step 2) ⇒ sitios base IIS.
+2. `evidence/<IP>/gobuster_<port>.txt` del mismo puerto — paths con
    `(Status: 301|302|307|308|403)` ⇒ directorios de cada sitio a escanear.
 
 Targets sin evidencia IIS (Apache/Express/nginx…) se **omiten** y se reportan.
@@ -85,7 +112,7 @@ Ejemplo con los 5 targets solicitados (10.155.10.14, 10.155.10.15,
 **10.156.244.42** (puertos 80 y 81) y **10.156.244.50** (solo :80; el :8080 es
 Tomcat) presentan `Microsoft-IIS`.
 
-## Uso
+## ▶️ Cómo se usa
 
 Hoy vive en `scripts/host/` y tiene dos modos:
 
@@ -152,10 +179,15 @@ python3 scripts/host/step9_iis_shortname_scan.py --ev-dir evidence/10.155.10.15 
 | `--dry-run` | listar URLs sin enviar requests |
 | `-v, --verbose` | verboso |
 
-## Salidas
+## 📥 Entrada / 📤 Salida
 
-Por target, dentro de la carpeta `outputs/` de cada target de CLIENTE
-(`CLIENTE/<IP>_<sufijo>/outputs/`, junto a los outputs de gobuster):
+- **Entrada:** las URLs base IIS y sus directorios, descubiertos según el modo (ver
+  *Descubrimiento de URLs objetivo* arriba). No recibe archivos por parámetro salvo con
+  `--urls <archivo>` (lista manual) o `--ev-dir <DIR>` (dir de evidencia del pipeline).
+- **Salida**, por target (la ruta depende del modo):
+
+- **Modo manual:** `CLIENTE/<IP>_<sufijo>/outputs/`, junto a los outputs de gobuster.
+- **Modo pipeline (`--ev-dir`):** directo en `evidence/<IP>/` (self-contained).
 
 | Archivo | Contenido |
 |---|---|
