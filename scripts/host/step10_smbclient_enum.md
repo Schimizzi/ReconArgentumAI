@@ -59,10 +59,16 @@ bash scripts/host/step10_smbclient_enum.sh --ev-dir evidence/10.150.40.155 --for
 > (al contrario del no-clobber del modo manual). `--no-ping-check` porque el target
 > ya respondió en los Steps 1-3 de la misma corrida (no se duplica el gate ICMP).
 
-- **Entrada:** el XML de Nmap del paso 3 (`outputs/nmap_detailed.xml`), que el script localiza
-  solo: si en `CLIENTE/` la carpeta del target tiene sufijo `_vuln` / `_no_vuln` (como la deja
-  `organize_project.py`), la encuentra automáticamente pasándole solo la IP.
-- **Salida** (en la misma carpeta `CLIENTE/<IP>/outputs/`):
+## 📥 Entrada / 📤 Salida
+
+- **Entrada:** el XML de Nmap del paso 3 (`nmap_detailed.xml`). Cómo lo localiza depende del modo:
+  - **Modo manual:** `CLIENTE/<IP>/outputs/nmap_detailed.xml`. El script resuelve la carpeta
+    solo: si en `CLIENTE/` el target tiene sufijo `_vuln` / `_no_vuln` (como lo deja
+    `organize_project.py`), la encuentra automáticamente pasándole solo la IP.
+  - **Modo pipeline (`--ev-dir DIR`):** `<DIR>/nmap_detailed.xml` **directo**, sin subcarpeta
+    `outputs/` ni resolución de sufijos (el pipeline escribe en `evidence/<IP>/`).
+- **Salida** (en la carpeta del target — `CLIENTE/<IP>/outputs/` en manual, `evidence/<IP>/`
+  en pipeline):
   - `smbclient_shares.txt` — la lista completa de recursos compartidos.
   - `smbclient_<share>.txt` — el contenido (archivos) de cada recurso accesible vía null session.
 
@@ -71,13 +77,14 @@ bash scripts/host/step10_smbclient_enum.sh --ev-dir evidence/10.150.40.155 --for
   > Disk accesible** (información expuesta). Si no (ej. `session setup failed:
   > NT_STATUS_ACCESS_DENIED`, sin respuesta, etc.), el archivo `smbclient_shares.txt` no se
   > genera/se elimina: es ruido sin hallazgo y no se entrega al Agente 6.
-- **Resumen de corrida `--all`** (en `CLIENTE/smbclient_checks/`):
+- **Resumen de corrida `--all`** (solo modo manual; en `CLIENTE/smbclient_checks/`):
   - `smbclient_summary.txt` — log acumulado por corrida (no se borran corridas previas, igual
     que `iis_shortname_summary.txt`). Por cada target deja: `estado`, `ports`, `shares_disk`,
     `accesibles`, `anon_login` y `detalle`, con el total de `ejecutados / con_vuln /
     anon_login / no_ping / no_smb / skip_existente` al final de cada corrida.
 
-> Los archivos quedan dentro de `outputs/` a propósito: el **Agente 6** (consolidador de
+> Los archivos quedan dentro de la carpeta del target (`outputs/` en modo manual,
+> `evidence/<IP>/` en modo pipeline) a propósito: el **Agente 6** (consolidador de
 > hallazgos) detecta cualquier archivo nuevo en `outputs/` y lo considera automáticamente
 > en la siguiente corrida, sin tocar ningún script.
 
@@ -99,8 +106,8 @@ bash scripts/host/step10_smbclient_enum.sh --ev-dir evidence/10.150.40.155 --for
 - **Evidencia condicional:** si la corrida no produce login anónimo ni shares accesibles,
   el `smbclient_shares.txt` no se conserva (se elimina). Así, solo quedan en `outputs/` los
   targets con hallazgo real (anon) o exposición verificada (shares Disk legibles).
-- En el modo `--all`, además del detalle por target en consola, queda el resumen acumulado
-  en `CLIENTE/smbclient_checks/smbclient_summary.txt` (mismo patrón de
+- En el modo `--all` (solo modo manual), además del detalle por target en consola, queda el
+  resumen acumulado en `CLIENTE/smbclient_checks/smbclient_summary.txt` (mismo patrón de
   `iis_shortname_checks`): ejecutados, targets que no respondieron al ping y targets con
   shares accesibles (potencial hallazgo).
 - **`anon_login=si`** marca que el server SMB **acepta** la sesión anónima (null session
