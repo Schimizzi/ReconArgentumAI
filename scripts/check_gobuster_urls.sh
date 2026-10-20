@@ -282,7 +282,7 @@ check_fingerprint(){
   esac
   # título de página
   local title
-  title="$(grep -oiE '<title[^>]*>[^<]*' "$TMP/get_body" 2>/dev/null | head -1 \
+  title="$(grep -aoiE '<title[^>]*>[^<]*' "$TMP/get_body" 2>/dev/null | head -1 \
     | sed -E 's/<title[^>]*>//i')"
   [ -n "$title" ] && add_finding info FINGERPRINT "Titulo de página" \
     "$1" "title: $title" "$port_e"
@@ -415,7 +415,7 @@ check_trace(){
       printf '%s\n' '--- end ---'
     } >> "$CMD_FILE"; }
   [ -n "$b" ] || { check_trace_done=1; return; }
-  m="$(printf '%s' "$b" | grep -o 'RecArgXST-[0-9]*' | head -1)"
+  m="$(printf '%s' "$b" | grep -ao 'RecArgXST-[0-9]*' 2>/dev/null | head -1)"
   if [ -n "$m" ]; then
     local port_e="$(printf '%s' "$1" | sed -E 's#^[a-z]+://([^:/]+):?([0-9]*).*#\2#')"
     [ -n "$port_e" ] || port_e="null"
@@ -443,8 +443,17 @@ check_patterns(){
   [ -n "$port_e" ] || port_e="null"
   # 1) ruta sensible por propio nombre (backup, .git, .env, config, phpMyAdmin...)
   if printf '%s' "$1" | grep -qiE '\.(git|env|bak|backup|sql|zip|tar|gz|log|conf|ini|yml|yaml|json)$|(^|/)(\.git|\.env|config|admin|phpmyadmin|manager|console|backup|test|dev|old)(/|$)'; then
-    add_finding medium PATTERNS "Ruta de interés por nombre" \
+    add_finding info PATTERNS "Ruta de interés por nombre" \
       "$1" "El path descubierto sugiere archivo/directorio sensible" "$port_e"
+    # confirmación: Content-Type real de la respuesta
+    local ctype="${GET_CTYPE:-}" bodysz="${GET_SIZE:-0}"
+    if [ -n "$ctype" ] && ! printf '%s' "$ctype" | grep -qi 'text/html'; then
+      add_finding medium PATTERNS "Archivo descargable (confirmado por Content-Type)" \
+        "$1" "Content-Type: $ctype · ${bodysz}b — archivo real descargable (no es HTML)" "$port_e"
+    elif [ -n "$ctype" ] && printf '%s' "$ctype" | grep -qi 'text/html'; then
+      add_finding low PATTERNS "Ruta sensible pero respuesta HTML" \
+        "$1" "Content-Type: $ctype — el servidor devuelve HTML, posible soft-404" "$port_e"
+    fi
   fi
   # 2) credenciales/secretos en body
   local hit
@@ -602,21 +611,26 @@ CACHE_SITE="$TMP/site_fetched.cache"
 build_urls(){
   local tdir="$1" ip="$2" f port scheme
   URLS=()
-  for f in "$tdir"/outputs/gobuster_*.txt; do
+  # Solo gobuster_<puerto>.txt (glob numérico): evita tomar por error
+  # gobuster_commands_outputs.txt / gobuster_evidence.txt de corridas previas.
+  for f in "$tdir"/outputs/gobuster_[0-9]*.txt; do
     [ -f "$f" ] || continue; [ -s "$f" ] || continue
     port=$(basename "$f" | sed -E 's/^gobuster_([0-9]+)\.txt$/\1/')
     scheme=http
-    if [ -f "$tdir/outputs/httpx.json" ] && grep -q "\"https://$ip:$port" "$tdir/outputs/httpx.json"; then
+    if [ -f "$tdir/outputs/httpx.json" ] && grep -aq "\"https://$ip:$port" "$tdir/outputs/httpx.json" 2>/dev/null; then
       scheme=https
     fi
     while read -r path rest; do
+      # Sanitizar: quita bytes de control (\0, \r, ...) que rompen grep/sort y contaminan URLs
+      path="${path//[[:cntrl:]]/}"
       [ -n "$path" ] || continue
       case "$path" in \#*|Running|Finished) continue ;; esac
       URLS+=("$scheme://$ip:$port/$path")
     done < "$f"
   done
   # dedupe y orden (LC_ALL=C evita 'Illegal byte sequence' en macOS con bytes no-UTF8)
-  URLS=( $(printf '%s\n' "${URLS[@]:-}" | LC_ALL=C sort -u | grep -v '^$') )
+  # sed '/^$/d' en vez de grep -v: sed no detecta binario ni rompe la lista con NUL
+  URLS=( $(printf '%s\n' "${URLS[@]:-}" | LC_ALL=C sort -u | sed '/^$/d') )
 }
 
 # =============================================================================
@@ -625,6 +639,22 @@ build_urls(){
 precheck_conn(){
   curl -s -k --http1.1 --connect-timeout "$CONNECT_TIMEOUT" \
     --max-time "$TIMEOUT" -o /dev/null "$1" 2>/dev/null
+}
+
+# precheck_conn_multi -> 0 si ALGÚN host:puerto del target responde (probe por base)
+# En vez de probar solo URLS[0], recorre los host:puerto distintos (scheme://ip:port/)
+# que aparecen en las URLs y usa el primero que responda. Con 1 retry por base
+# (algunos servicios TLS/HTTP necesitan un segundo handshake / warm-up).
+precheck_conn_multi(){
+  local u base tried=""
+  for u in "${URLS[@]:-}"; do
+    base="$(printf '%s' "$u" | sed -E 's#^(https?://[^/]+)/?.*$#\1/#')"
+    case "$tried" in *"|$base|"*) continue ;; esac
+    tried+="|$base|"
+    precheck_conn "$base" && return 0
+    precheck_conn "$base" && return 0   # 1 retry
+  done
+  return 1
 }
 
 # =============================================================================
@@ -659,21 +689,29 @@ process_url(){
 # run_one_target IP — el corazón del modo por target
 # =============================================================================
 run_one_target(){
-  local ip="$1" tdir outd nfind d
+  local ip="$1" tdir outd nfind d force_del=0
   # Patrón exacto ${ip}_* para no confundir prefijos (ej. 10.155.10.150 vs 10.155.10.15);
   # se elige la primera carpeta que tenga outputs/.
   tdir=""
+  # 1- intentar con sufijo _vuln / _no_vuln (ej. 10.0.0.1_vuln)
   for d in "$TARGET_BASE"/"${ip}"_*; do
     [ -d "$d/outputs" ] && { tdir="$d"; break; }
   done
-  [ -n "$tdir" ] || { echo "  [ERROR] $ip: no hay carpeta ${ip}_* con outputs/ en CLIENTE."; return 0; }
+  # 2- fallback: carpeta exacta (sin sufijo, estructura actual)
+  if [ -z "$tdir" ] && [ -d "$TARGET_BASE/$ip/outputs" ]; then
+    tdir="$TARGET_BASE/$ip"
+  fi
+  [ -n "$tdir" ] || { echo "  [ERROR] $ip: no hay carpeta ${ip}_* ni ${ip} con outputs/ en CLIENTE."; return 0; }
   outd="$tdir/outputs"
 
   # 2- SKIP si ya escaneado (para no sobrescribir lo hecho con otra VPN).
+  #    Con --force el borrado NO ocurre acá: se difiere hasta después del
+  #    precheck de conectividad (abajo), para no perder la evidencia previa
+  #    si el target está inalcanzable en esta corrida (VPN del rango apagada).
   if [ -f "$outd/gobuster_evidence.txt" ] || [ -f "$outd/gobuster_evidence.json" ]; then
     if [ "$FORCE" = 1 ]; then
-      echo "  [!FORCE] $ip: reescaneando evidencia previa"
-      rm -f "$outd/gobuster_evidence.txt" "$outd/gobuster_evidence.json"
+      echo "  [!FORCE] $ip: reescaneando evidencia previa (borrado tras precheck OK)"
+      force_del=1
     else
       echo "  [SKIP] $ip: ya escaneado (gobuster_evidence.*). Usa --force para reescanear."
       N_SKIP=$((N_SKIP+1))
@@ -685,9 +723,12 @@ run_one_target(){
   build_urls "$tdir" "$ip"
   [ "${#URLS[@]}" -ge 1 ] || { echo "  [SKIP] $ip: sin gobuster URLs que revisar"; return 0; }
 
-  # 4- PRECHECK DE CONECTIVIDAD ANTES DE ESCRIBIR NADA
+  # 4- PRECHECK DE CONECTIVIDAD ANTES DE ESCRIBIR NADA.
+  #    Proba la base (scheme://ip:puerto/) de cada puerto distinto, no solo URLS[0]:
+  #    así un target cuyo web real está en otro puerto (ej. 3443) no se marca NO_CONEX
+  #    solo porque el puerto de la primera URL no contesta.
   if [ "$CHECK_CONN" = 1 ] && [ "$DRY" = 0 ]; then
-    if ! precheck_conn "${URLS[0]}"; then
+    if ! precheck_conn_multi; then
       printf 'SIN_CONEXION\t%s\t%s\n' "$ip" "target no alcanzable en esta corrida (VPN del rango?)" >> "$UNREACH"
       printf '  [SIN_CONEXION] target=%s url=%s\n' "$ip" "${URLS[0]}" >> "$RAW"
       echo "  [NO_CONEX] $ip: sin conectividad en esta corrida. No generé hallazgos."
@@ -697,7 +738,13 @@ run_one_target(){
     echo "  [OK-CONN] $ip: precheck de conectividad superado"
   fi
 
-  # 5- salidas POR TARGET (variable globales que usan checks/add_finding)
+  # 5- con conectividad OK: recién acá se borra la evidencia previa (si --force).
+  #    Si el precheck falló arriba, return 0 ya conservó la evidencia anterior.
+  if [ "$force_del" = 1 ]; then
+    rm -f "$outd/gobuster_evidence.txt" "$outd/gobuster_evidence.json"
+  fi
+
+  # 6- salidas POR TARGET (variable globales que usan checks/add_finding)
   FIND_TXT="$outd/gobuster_evidence.txt"
   FIND_JSON="$outd/gobuster_evidence.json"
   FIND_JSONL="$TMP/evidence_${ip}.jsonl"
@@ -709,14 +756,14 @@ run_one_target(){
     echo "# Es EVIDENCIA PARA AUDITORÍA HUMANA; NO lo consume el Agente 6."
   } >> "$CMD_FILE"
 
-  # 6- procesar cada URL
+  # 7- procesar cada URL
   for url in "${URLS[@]}"; do
     [ "$DRY" = 1 ] && { echo "  # $url"; continue; }
     process_url "$url"
   done
   [ "$DRY" = 1 ] && return 0
 
-  # 7- concluir: evidence.txt (cabecera + hallazgos) + evidence.json
+  # 8- concluir: evidence.txt (cabecera + hallazgos) + evidence.json
   {
     printf '# Inspecciones gobuster - %s (%s)\n' "$ip" "$(date '+%Y-%m-%d %H:%M:%S')"
     cat "$FIND_TXT" 2>/dev/null
@@ -742,7 +789,8 @@ run_all(){
   local d ip
   for d in "$TARGET_BASE"/*/; do
     [ -d "$d/outputs" ] || continue
-    ls "$d/outputs"/gobuster_*.txt >/dev/null 2>&1 || continue
+    # solo targets con gobuster_<puerto>.txt reales (no lo que ya se generó)
+    ls "$d/outputs"/gobuster_[0-9]*.txt >/dev/null 2>&1 || continue
     ip="$(basename "$d")"; ip="${ip%%_*}"
     echo ">>> target: $ip"
     run_one_target "$ip"

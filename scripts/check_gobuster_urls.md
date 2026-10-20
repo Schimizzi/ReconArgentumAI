@@ -28,26 +28,31 @@ bash scripts/check_gobuster_urls.sh --target 10.155.10.15 --dry-run
 ```
 
 ### Lo que hace por cada equipo, en orden
-1. **Ubica la carpeta** del target (busca `CLIENTE/<IP>_vuln/outputs/`).
+1. **Ubica la carpeta** del target en `CLIENTE/` — acepta tanto carpetas con sufijo `_vuln`/`_no_vuln`
+   como la carpeta con la IP pura (`CLIENTE/<IP>/outputs/`).
 2. **Verifica si ya fue escaneado**: si existe `gobuster_evidence.*`, lo **salta** (SKIP) para no
-   pisar el trabajo ya hecho. `--force` lo re-escanza.
-3. **Arma la lista de URLs** de ese equipo desde sus resultados de Gobuster.
-4. **Chequea conectividad** antes de tocar nada:
+   pisar el trabajo ya hecho. `--force` lo re-escanza, pero el borrado de la evidencia previa se hace
+   **después** del precheck de conectividad (así un target inalcanzable **conserva** su evidencia
+   anterior en vez de perderla).
+3. **Arma la lista de URLs** de ese equipo desde sus resultados de Gobuster (`gobuster_<puerto>.txt`
+   reales, no los archivos que ya generó el propio script).
+4. **Chequea conectividad** antes de tocar nada — probando la **base** (`scheme://IP:puerto/`) de cada
+   puerto distinto hasta que uno responda:
    - **Si el equipo NO responde** (por ejemplo porque la VPN de ese rango está apagada) →
      **NO genera hallazgos**. Solo deja una constancia en `CLIENTE/gobuster_checks/`
      (`gobuster_checks_RAW.txt` + `gobuster_checks_unreachable.txt`) y pasa al siguiente.
    - **Si responde** → visita todas sus URLs aplicando los chequeos.
-5. **Deja la evidencia en la carpeta del equipo** (`CLIENTE/<IP>_vuln/outputs/`).
+5. **Deja la evidencia en la carpeta del equipo** (`CLIENTE/<IP>/outputs/`).
 
 ---
 
 ## 📥 Entrada / 📤 Salida por target
 
 ### Entrada
-- Un escaneo de Gobuster previo: `CLIENTE/<IP>_vuln/outputs/gobuster_<puerto>.txt`
+- Un escaneo de Gobuster previo: `CLIENTE/<IP>/outputs/gobuster_<puerto>.txt`
   (y, si existe, `httpx.json` para saber si usar HTTP o HTTPS).
 
-### Salida — en `CLIENTE/<IP>_vuln/outputs/`
+### Salida — en `CLIENTE/<IP>/outputs/`
 
 | Archivo | Para quién | Qué contiene |
 |---|---|---|
@@ -82,6 +87,7 @@ bash scripts/check_gobuster_urls.sh --target 10.155.10.15 --dry-run
 | **Métodos HTTP** | Si el servidor permite métodos peligrosos (PUT/DELETE/WebDAV…) |
 | **TRACE** | Si el servidor "devuelve" la petición tal cual (posible ataque XST) |
 | **Listado de directorios** | Si una carpeta muestra su contenido público ("Index of…") |
+| **Rutas sensibles** | Si el path sugiere archivo/directorio sensible (`.bak`, `.conf`, `.env`…). Se reporta como **info** por el nombre, y se **confirma** por Content-Type: archivo real descargable (**medium**) vs. respuesta HTML/soft-404 (**low**) |
 | **Errores reveladores** | Mensajes de error que filtran datos internos (errores SQL, stack traces) |
 | **Credenciales / secretos** | Si una página expone contraseñas, claves o tokens |
 | **CORS** *(opcional)* | Si otras webs podrían leer los datos del sitio con credenciales |

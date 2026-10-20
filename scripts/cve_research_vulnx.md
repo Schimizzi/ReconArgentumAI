@@ -40,6 +40,7 @@ python3 scripts/cve_research_vulnx.py \
 | `--nuclei` | No | Path a `nuclei.json` (para marcar lo que Nuclei ya encontró) |
 | `--output` | No | Path de salida (por defecto `cve_research/<target_id>_cves.json`) |
 | `--dry-run` | No | Muestra el resumen y **no** escribe el JSON |
+| `--no-relevance-filter` | No | Desactiva el filtro anti falso positivo (ver §7) |
 
 Antes de usarlo, `vulnx` tiene que estar instalado (una sola vez):
 
@@ -82,6 +83,12 @@ Sirve saberlo aunque no programes, porque explica el contenido del JSON:
   registrado en `source_omissions`) y la búsqueda sigue con el resto.
 - **Nunca inventa CVEs**: todo registro proviene de `vulnx search` + `vulnx id`. Sin fuente, no se
   lista.
+- **Filtro anti falso positivo (relevancia de producto):** `vulnx` devuelve, por matcher amplio, CVEs
+  de productos que NO corren en el host (ej. consultar "PostgreSQL DB" y recibir CVE-2023-45249 de
+  *Acronis*, o "Microsoft IIS httpd" y recibir CVEs de *SharePoint*/*DirectX*). El script **descarta**
+  un CVE cuando el producto afectado (`affected_products[].product`) y su vendor no coinciden con el
+  servicio/producto consultado. Match por tokens + alias conocidos (IIS↔internet_information_services,
+  Apache→http_server, etc.). Desactivable con `--no-relevance-filter`.
 - Si `vulnx` no está en el PATH, el script corta con un error claro indicando cómo instalarlo (no
   hay vuelta atrás automática a la API NVD directa).
 - Al final **valida la consistencia**: el `summary` debe coincidir con los CVEs listados y todos

@@ -49,6 +49,10 @@ SEARCH_LIMIT = 20
 TOP_N_MAX = 5
 CVSS_MIN = 4.0
 
+# Filtro de relevancia CVE->servicio activado por defecto (ver _cve_is_relevant).
+# Desactivable con --no-relevance-filter.
+RELEVANCE_FILTER = True
+
 IMPACTO_CRITICO_KEYWORDS = {
     "remote_code_execution", "privilege_escalation",
     "broken_authentication", "broken_access_control",
@@ -67,6 +71,127 @@ WHATWEB_NON_TECH_PLUGINS = {
     "uncommonheaders", "httpserver", "cookies", "headers", "email", "frame",
     "object", "passwordfield", "comment",
 }
+
+# ---------------------------------------------------------------------------
+# Filtro de relevancia CVE -> servicio (anti falso positivo)
+# ---------------------------------------------------------------------------
+# vulnx devuelve por matcher amplio CVEs de productos que NO corren en el host
+# (ej. consultar "msrpc" o "Microsoft IIS httpd" y recibir CVEs de Juniper,
+# ownCloud, SharePoint, mJobtime, Acronis...). Este filtro descarta un CVE si
+# NINGÚN token de su producto afectado (affected_products[].product/vendor)
+# coincide con algún token de la consulta (nombre de servicio + producto/versión).
+
+_TOKEN_STOPWORDS = {
+    "http", "https", "httpd", "server", "service", "services", "engine", "db",
+    "the", "and", "for", "with", "ssl", "tls", "edition", "version", "common",
+    "agent", "extension", "nagios", "linux", "unix", "unknown", "none",
+}
+
+# Vendors "mono-producto": su nombre de vendor ES el nombre del producto
+# (ej. Apache→http_server, Grafana→grafana). Para estos se permite match por
+# vendor. Los vendors genéricos (microsoft, oracle, cisco...) NO se permiten por
+# vendor para evitar que "microsoft" haga match entre IIS, DirectX y SharePoint.
+_PRODUCT_LIKE_VENDORS = {
+    "apache", "grafana", "owncloud", "tomcat", "postgresql", "postgres",
+    "openssh", "openbsd", "nginx", "wordpress", "drupal", "zabbix", "gitlab",
+    "jenkins", "moodle", "atlassian", "jira", "confluence", "sonicwall",
+    "ivanti", "mjobtime", "anteeowms", "acronis", "graphapi",
+}
+
+# Alias de nombres de producto (abreviatura Nmap -> nombre vulnx y viceversa)
+_TOKEN_ALIASES = {
+    "iis": {"internet_information_services"},
+    "internet_information_services": {"iis"},
+    "coyote": {"tomcat"},
+    "microsoft-ds": {"windows_server", "smb"},
+    "netbios-ssn": {"windows_server", "smb"},
+    "msrpc": {"windows_server"},
+    "kerberos": {"windows_server"},
+    "ldap": {"windows_server", "active_directory"},
+    "ms-wbt-server": {"windows_server", "remote_desktop"},
+    "terminal": {"windows_server", "remote_desktop"},
+    "wsman": {"windows_server"},
+    "httpapi": {"windows_server"},
+}
+
+
+def _tokenize(text: str) -> set:
+    """Divide un texto en tokens alfanuméricos >= 3 chars, sin stopwords."""
+    if not text:
+        return set()
+    toks = {t for t in re.split(r"[^a-z0-9]+", text.lower()) if len(t) >= 3}
+    return {t for t in toks if t not in _TOKEN_STOPWORDS}
+
+
+def _expand_aliases(tokens: set) -> set:
+    """Agrega alias conocidos a un conjunto de tokens."""
+    out = set(tokens)
+    for t in list(tokens):
+        out |= _TOKEN_ALIASES.get(t, set())
+    return out
+
+
+def _token_match(a: str, b: str) -> bool:
+    """Match exacto, o por substring solo si AMBOS tokens son largos (>=5).
+
+    Evita falsos match por tokens cortos/genéricos (ej. "api" dentro de "httpapi").
+    """
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    return len(a) >= 5 and len(b) >= 5 and (a in b or b in a)
+
+
+# Productos conocidos que NO tienen relación con infraestructura típica: si
+# aparecen en la descripción de un CVE sin `affected_products`, se descarta.
+_NOISE_KEYWORDS = {
+    "owncloud", "graph_api", "graphapi", "sharepoint", "mjobtime", "anteeowms",
+    "anteeo", "acronis", "cyber_infrastructure", "rosariosis", "rosario",
+    "ivanti", "mobileiron", "sma100", "solarwinds", "serv-u", "serv_u",
+}
+
+
+def _cve_is_relevant(detail: dict, query_tokens: set) -> bool:
+    """True si el CVE parece aplicarse al producto consultado.
+
+    Reglas:
+    - Match por PRODUCTO afectado (token o string completo) -> relevante.
+    - Match por VENDOR solo si el vendor es "mono-producto" (allowlist).
+    - Sin `affected_products`: se usa la descripción contra _NOISE_KEYWORDS.
+    """
+    affected = detail.get("affected_products") or []
+    q_exp = _expand_aliases(query_tokens)
+    if affected:
+        for a in affected:
+            prod = (a.get("product") or "").lower()
+            vend = (a.get("vendor") or "").lower()
+            # 1) match por PRODUCTO
+            cand = _expand_aliases(_tokenize(prod))
+            if prod:
+                cand.add(prod.replace(" ", "_"))
+            cand = _expand_aliases(cand)
+            for ct in cand:
+                for qt in q_exp:
+                    if _token_match(ct, qt):
+                        return True
+            # 2) match por VENDOR solo si es mono-producto
+            if vend in _PRODUCT_LIKE_VENDORS:
+                for ct in _expand_aliases(_tokenize(vend)):
+                    for qt in q_exp:
+                        if _token_match(ct, qt):
+                            return True
+        return False
+    # Sin affected_products: usar descripción (safety-net anti ruido)
+    desc = (detail.get("description") or "").lower()
+    if desc:
+        for kw in _NOISE_KEYWORDS:
+            if kw in desc:
+                # el ruido aparece en la descripción: descartar salvo que la
+                # consulta apunte explícitamente a ese producto
+                if not any(_token_match(kw, qt) for qt in q_exp):
+                    return False
+    return True
 
 
 def _severity_label(score: float | None) -> str:
@@ -348,12 +473,23 @@ def _investigate_service(name: str, version: str, port: int,
     cve_ids = [r["cve_id"] for r in valid if r.get("cve_id")]
     details = _get_cve_details(cve_ids)
 
+    # Tokens de la consulta: nombre de servicio + producto/versión detectada
+    query_tokens = _tokenize(name) | _tokenize(version)
+
     entries = []
+    filtered_out = 0
     for r in valid:
         cve_id = r.get("cve_id", "")
         detail = details.get(cve_id, r)
+        # Anti falso positivo: descartar CVEs de productos ajenos (matcher amplio)
+        if RELEVANCE_FILTER and not _cve_is_relevant(detail if detail.get("affected_products") else r, query_tokens):
+            filtered_out += 1
+            continue
         already = cve_id.upper() in nuclei_cves
         entries.append(_build_cve_entry(detail, already))
+
+    if filtered_out:
+        print(f"[{filtered_out} descartados por relevancia] ", end="")
 
     ranked = _rank_cves(entries)
     for i, cve in enumerate(ranked):
@@ -368,31 +504,52 @@ def _investigate_service(name: str, version: str, port: int,
 def _collect_omissions(services_analyzed: list[dict],
                         web_analyzed: list[dict],
                         failed_services: list[str] | None = None,
-                        failed_web: list[str] | None = None) -> list[dict]:
+                        failed_web: list[str] | None = None,
+                        omitted_services: list[str] | None = None,
+                        omitted_web: list[str] | None = None) -> list[dict]:
     """Registra por qué un servicio quedó sin CVEs.
 
-    reason=query_failed   → vulnx no respondió (rate limit/timeout) → revisar
+    reason=query_failed    → vulnx no respondió (rate limit/timeout) → revisar
     reason=no_data_available → vulnx respondió sin CVEs para ese producto
+    reason=sin_version     → Nmap no detectó version exacta → omitido intencionalmente
     """
     failed_services = failed_services or []
     failed_web = failed_web or []
+    omitted_services = omitted_services or []
+    omitted_web = omitted_web or []
     omissions = []
     for s in services_analyzed:
         if not s.get("cves"):
             name = s.get("service", "?")
-            omissions.append({
-                "service": name,
-                "source": "vulnx",
-                "reason": "query_failed" if name in failed_services else "no_data_available",
-            })
+            if s.get("error") == "sin_version":
+                omissions.append({
+                    "service": name,
+                    "source": "vulnx",
+                    "reason": "sin_version",
+                    "detail": "Nmap no detectó version exacta — omitido por filtro de precisión",
+                })
+            else:
+                omissions.append({
+                    "service": name,
+                    "source": "vulnx",
+                    "reason": "query_failed" if name in failed_services else "no_data_available",
+                })
     for w in web_analyzed:
         if not w.get("cves"):
             key = f"web/{w.get('technology', '?')}"
-            omissions.append({
-                "service": key,
-                "source": "vulnx",
-                "reason": "query_failed" if key in failed_web else "no_data_available",
-            })
+            if w.get("error") == "sin_version":
+                omissions.append({
+                    "service": key,
+                    "source": "vulnx",
+                    "reason": "sin_version",
+                    "detail": "WhatWeb no detectó version exacta — omitido por filtro de precisión",
+                })
+            else:
+                omissions.append({
+                    "service": key,
+                    "source": "vulnx",
+                    "reason": "query_failed" if key in failed_web else "no_data_available",
+                })
     return omissions
 
 
@@ -403,14 +560,35 @@ def _collect_omissions(services_analyzed: list[dict],
 def process_target(target_id: str, target_ip: str,
                    nmap_path: str, whatweb_path: str | None,
                    nuclei_path: str | None,
-                   output_path: str | None = None) -> dict:
+                   output_path: str | None = None,
+                   dry_run: bool = False) -> dict:
     services = _load_nmap_services(nmap_path)
     web_technologies = _load_whatweb(whatweb_path)
     nuclei_cves = _load_nuclei_cves(nuclei_path)
 
     services_analyzed = []
     failed_services = []
+    omitted_services = []
     for svc in services:
+        # Saltar servicios sin versión: Nmap no pudo determinar la versión exacta,
+        # por lo que vulnx buscaría solo por nombre de servicio/producto y devolvería
+        # CVEs de todas las versiones (muchos FALSOS POSITIVOS, ej. "msrpc" → CVEs de
+        # routers Juniper en un Windows Server).
+        has_version = svc.get("version", "") or ""
+        if has_version.lower() in ("", "unknown", "none"):
+            svc_name = svc.get("product", "") or svc.get("name", "?")
+            print(f"  \U0001f50d {svc['name']} (port {svc['port']})... [omitido: sin version detectada]", flush=True)
+            svc_stub = {
+                "port": svc["port"], "protocol": svc.get("protocol", "tcp"),
+                "name": svc.get("name", "?"), "product": svc.get("product", ""),
+                "version": "", "cves": [], "ranked": False,
+                "source_service": f"{svc.get('name','')} (no version → omitido)",
+                "error": "sin_version",
+            }
+            if svc.get("product","") and not svc.get("version",""):
+                omitted_services.append(f"{svc.get('product')} (port {svc['port']} — sin version)")
+            services_analyzed.append(svc_stub)
+            continue
         print(f"  \U0001f50d {svc['name']} (port {svc['port']}, v{svc['version']})...",
               end=" ", flush=True)
         r, failed = _investigate_service(svc["name"], svc["version"], svc["port"], nuclei_cves)
@@ -421,7 +599,20 @@ def process_target(target_id: str, target_ip: str,
 
     web_analyzed = []
     failed_web = []
+    omitted_web = []
     for wt in web_technologies:
+        has_version = wt.get("version", "") or ""
+        if has_version.lower() in ("", "unknown", "none"):
+            print(f"  \U0001f310 web/{wt['technology']}... [omitido: sin version detectada]", flush=True)
+            wt_stub = {
+                "technology": wt["technology"], "version": wt.get("version", ""),
+                "cves": [], "ranked": False,
+                "error": "sin_version",
+            }
+            if not wt.get("version", ""):
+                omitted_web.append(f"web/{wt['technology']} (sin version)")
+            web_analyzed.append(wt_stub)
+            continue
         print(f"  \U0001f310 web/{wt['technology']} (v{wt['version']})...",
               end=" ", flush=True)
         r, failed = _investigate_service(wt["technology"], wt["version"], 0,
@@ -433,6 +624,10 @@ def process_target(target_id: str, target_ip: str,
     if failed_services or failed_web:
         print(f"  \u26a0\ufe0f  {len(failed_services) + len(failed_web)} consulta(s) fallaron "
               f"(ver source_omissions[].reason=query_failed)", file=sys.stderr)
+    if omitted_services or omitted_web:
+        print(f"  \U0001f4a1 Sin version: {len(omitted_services)} servicio(s) + "
+              f"{len(omitted_web)} web(s) omitidos (sin version exacta)",
+              file=sys.stderr)
 
     all_cves = []
     for s in services_analyzed:
@@ -450,7 +645,8 @@ def process_target(target_id: str, target_ip: str,
         "services_analyzed": services_analyzed,
         "web_technologies": web_analyzed,
         "source_omissions": _collect_omissions(services_analyzed, web_analyzed,
-                                                failed_services, failed_web),
+                                                failed_services, failed_web,
+                                                omitted_services, omitted_web),
         "summary": {
             "total_cves": len(all_cves),
             "critical": sev_count("CRITICAL"),
@@ -462,19 +658,22 @@ def process_target(target_id: str, target_ip: str,
         },
     }
 
-    if output_path:
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(result, f, ensure_ascii=False, indent=2)
-        print(f"\n  \u2705 Output \u2192 {output_path}")
+    if dry_run:
+        print("\n  \U0001f4ac DRY RUN \u2014 JSON no escrito (solo se muestra el resumen).")
     else:
-        default_path = os.path.normpath(os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "..",
-            "cve_research", f"{target_id}_cves.json"))
-        os.makedirs(os.path.dirname(default_path), exist_ok=True)
-        with open(default_path, "w", encoding="utf-8") as f:
-            json.dump(result, f, ensure_ascii=False, indent=2)
-        print(f"\n  \u2705 Output \u2192 {default_path}")
+        if output_path:
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(result, f, ensure_ascii=False, indent=2)
+            print(f"\n  \u2705 Output \u2192 {output_path}")
+        else:
+            default_path = os.path.normpath(os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), "..",
+                "cve_research", f"{target_id}_cves.json"))
+            os.makedirs(os.path.dirname(default_path), exist_ok=True)
+            with open(default_path, "w", encoding="utf-8") as f:
+                json.dump(result, f, ensure_ascii=False, indent=2)
+            print(f"\n  \u2705 Output \u2192 {default_path}")
 
     return result
 # ---------------------------------------------------------------------------
@@ -512,7 +711,12 @@ def main():
                         help="Path de salida (default: cve_research/<target_id>_cves.json)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Solo imprime lo que haria, no escribe output")
+    parser.add_argument("--no-relevance-filter", action="store_true",
+                        help="Desactivar el filtro anti falso positivo (CVE por relevancia de producto)")
     args = parser.parse_args()
+
+    # Flag global del filtro de relevancia
+    globals()["RELEVANCE_FILTER"] = not args.no_relevance_filter
 
     print(f"\n\U0001f52c CVE Research \u2014 {args.target_ip} ({args.target_id})")
     print(f"   Motor: vulnx v2")
@@ -528,15 +732,15 @@ def main():
         whatweb_path=args.whatweb,
         nuclei_path=args.nuclei,
         output_path=args.output,
+        dry_run=args.dry_run,
     )
 
     if args.dry_run:
-        print("\n  \U0001f4cb DRY RUN \u2014 JSON no escrito. Resumen:")
         s = result["summary"]
-        print(f"     Total CVEs: {s['total_cves']}")
-        print(f"     Criticas: {s['critical']} | Altas: {s['high']} | "
-              f"Medias: {s['medium']} | Bajas: {s['low']}")
-        print(f"     Con exploit publico: {s['with_public_exploit']} | "
+        print(f"\n  \U0001f4ca Resumen dry-run: {s['total_cves']} CVEs | "
+              f"Criticas: {s['critical']} | Altas: {s['high']} | "
+              f"Medias: {s['medium']} | Bajas: {s['low']} | "
+              f"Con exploit publico: {s['with_public_exploit']} | "
               f"Parche disp.: {s['patched_available']}")
         return
 

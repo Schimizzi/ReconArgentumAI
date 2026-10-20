@@ -25,6 +25,8 @@ Para cada servicio+versión y cada tecnología web, consultar **exclusivamente**
 Reglas:
 - **Timeout por consulta: 30 segundos (máximo)**. Es un parámetro de la fase de investigación (no de `stealth.yaml`, que rige solo los comandos de recon) y este documento es su única fuente.
 - Fuente sin respuesta dentro de 30s → **se omite** y la búsqueda continúa con las restantes; la omisión se registra en `source_omissions[]` del output.
+- **Filtro por versión detectada**: solo se investigan servicios/tecnologías con **versión exacta**; los que no la tienen se omiten y se registran con `reason: "sin_version"` en `source_omissions[]`.
+- **Filtro de relevancia de producto (anti falso positivo)**: se descarta todo CVE cuyo `affected_products` no coincida con el servicio/producto consultado (matcher amplio de vulnx). Desactivable con `--no-relevance-filter`. Ver `tools/vulnx_help.md`.
 - Ninguna fuente devuelve datos para un servicio → el output registra `"cves": []` con la nota `no_data_available`.
 - Si `vulnx` no está disponible en PATH, se aborta con error (no hay fallback automático a NVD directa).
 
