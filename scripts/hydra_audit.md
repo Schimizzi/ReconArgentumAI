@@ -79,8 +79,7 @@ bash scripts/hydra_audit.sh --all --dry-run
   - `logs/hydra.log` — **log central acumulado con TODAS las ejecuciones** (comando, intentos,
     resultado, hallazgo y **salida verbosa completa de hydra**). Nunca se borra.
   - `evidence/<IP>/hydra_<servicio>_<puerto>.txt` — **solo si hay hallazgo** (`VULNERABLE`).
-    Si ya existe una carpeta `CLIENTE/<IP>/outputs`, se copia ahí y el **Agente 6 lo detecta
-    automáticamente** en la próxima corrida (patrón del proyecto).
+    Si ya existe una carpeta `CLIENTE/<IP>/outputs`, se copia ahí para su revisión manual.
 
 ## ⚠️ Notas
 

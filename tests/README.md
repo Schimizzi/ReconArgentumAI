@@ -21,4 +21,4 @@ python3 tests/test_agente4_field_evidence.py
 
 - Los tests usan paths **relativos al repo** (`WS = <repo>/`), no absolutos.
 - No forman parte del pipeline de producción; son red de seguridad de mantenimiento.
-- Agregar nuevos tests aquí, un archivo por área (Agente 3, Agente 6, Steps 11/12, etc.).
+- Agregar nuevos tests aquí, un archivo por área (Agente 3, Agente 4, Steps 11/12, etc.).

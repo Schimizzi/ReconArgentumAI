@@ -291,7 +291,7 @@ grep -qE "namingContexts:|rootDomainNamingContext:|dnsHostName:" "$OUT_TXT" 2>/d
 MODO=anon; [ -n "$PWFILE" ] && MODO=cred
 echo "STEP_LDAP_DONE $TARGET uri=$URI ports=${LDAP_PORTS} base_dn=${BASE_DN:-none} dns_host=${DHC:-none} auth=$MODO"
 if [ "$CALIFICA" -eq 1 ]; then
-  echo "Evidencia: $OUT_TXT (+ ldapsearch_domain/users/spn si aplica) → detectada por el Agente 6."
+  echo "Evidencia: $OUT_TXT (+ ldapsearch_domain/users/spn si aplica) → disponible para revisión manual."
 else
   rm -f "$OUT_TXT" "$TGT_DIR"/ldapsearch_domain.txt "$TGT_DIR"/ldapsearch_users.txt "$TGT_DIR"/ldapsearch_spn.txt
   echo "ldapsearch: $TARGET sin datos (bind anonimo denegado o LDAP sin respuesta) → evidencia NO conservada"

@@ -295,7 +295,7 @@ python3 scripts/host/step9_iis_shortname_scan.py --ev-dir <WORKSPACE>/evidence/<
 
 - La firma IIS se toma del campo `webserver` de `httpx.json` (`Microsoft-IIS/8.5`, `Microsoft-IIS/10.0`,
   etc.); servers como `gSOAP/2.8`, `Apache-Coyote/1.1` o `nginx` **no** disparan el Step 9.
-- Evidencia en `evidence/<target>/`: `iis_shortname_evidence.txt`/`.json` (consumido por el Agente 6),
+- Evidencia en `evidence/<target>/`: `iis_shortname_evidence.txt`/`.json`,
   `iis_scan_urls.txt` y `iis_shortname_commands_outputs.txt`.
 - `--force` no es necesario aquí (el script conserva evidencia previa salvo que sea SIN_CONEXION total;
   en el pipeline las corridas son frescas sobre el ev-dir del target).

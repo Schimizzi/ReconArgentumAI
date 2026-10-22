@@ -368,11 +368,11 @@ write_evidence() {
     cat "$TMP/raw.out"
   } > "$evid/hydra_${svc}_${port}.txt"
   echo "  📁 Evidencia: $evid/hydra_${svc}_${port}.txt"
-  # Copia a CLIENTE/<target>/outputs si existe → el Agente 6 lo detecta en la próxima corrida
+  # Copia a CLIENTE/<target>/outputs si existe (evidencia para revisión manual)
   local d
   for d in "$WS/CLIENTE/$ip/outputs" "$WS"/CLIENTE/${ip}_*/outputs; do
     [ -d "$d" ] && { cp "$evid/hydra_${svc}_${port}.txt" "$d/" 2>/dev/null && \
-      echo "  → copia a $d/ (Agente 6 lo toma automáticamente)"; break; }
+      echo "  → copia a $d/ (evidencia para revisión manual)"; break; }
   done
 }
 

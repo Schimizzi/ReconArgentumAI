@@ -360,7 +360,7 @@ grep -q 'Anonymous login' "$SHARES_LIST" 2>/dev/null && CALIFICA=1
 N_DISK=$( [ -n "$DISK_SHARES" ] && printf '%s\n' "$DISK_SHARES" | grep -c . || echo 0 )
 echo "STEP_SMBCLIENT_DONE $TARGET ports=${SMB_PORTS} shares_disk=${N_DISK} accesibles=${ACCESSIBLE}"
 if [ "$CALIFICA" -eq 1 ]; then
-  echo "Evidencia: $TGT_DIR/smbclient_shares.txt + smbclient_<share>.txt → detectada por el Agente 6 en la próxima corrida."
+  echo "Evidencia: $TGT_DIR/smbclient_shares.txt + smbclient_<share>.txt → disponible para revisión manual."
 else
   # D (2026-10-22): la evidencia cruda se descarta (es ruido sin hallazgo), pero se
   # conserva una NOTA con el motivo LITERAL. Sin ella el manifest quedaba con

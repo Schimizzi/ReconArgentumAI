@@ -59,7 +59,7 @@ bash scripts/host/step12_enum4linux_enum.sh --ev-dir evidence/10.150.40.155 --fo
   workgroup/dominio). En modo manual se busca en `CLIENTE/<IP>/outputs/`; en modo pipeline, en `<DIR>/`.
 - **Salida** (en la carpeta del target: `CLIENTE/<IP>/outputs/` manual, `evidence/<IP>/` pipeline):
   - `enum4linux.txt` — salida cruda completa (la **primera línea es el comando** ejecutado).
-  - `enum4linux.json` / `enum4linux.yaml` — export estructurado de `enum4linux-ng` (`-oA`), para el Agente 6.
+  - `enum4linux.json` / `enum4linux.yaml` — export estructurado de `enum4linux-ng` (`-oA`), para revisión manual.
   - Resumen de la corrida `--all`: `CLIENTE/enum4linux_checks/enum4linux_summary.txt`.
 
 ## ⚠️ Notas
@@ -77,8 +77,7 @@ bash scripts/host/step12_enum4linux_enum.sh --ev-dir evidence/10.150.40.155 --fo
 - **Evidencia condicional:** solo se conserva `enum4linux.*` si hubo sesión establecida y al menos
   una sección con datos; si no, se elimina (ruido sin hallazgo) y se conserva únicamente la
   **nota del rechazo** `enum4linux_sin_sesion.txt` (comando + motivo literal, ej.
-  `NT_STATUS_LOGON_FAILURE`). Esa nota la declara el `manifest.json` y el Agente 6 la reporta como
-  hallazgo informativo *"Sesion SMB anonima rechazada (enum4linux)"* (antes el rechazo se perdía).
+  `NT_STATUS_LOGON_FAILURE`). Esa nota la declara el `manifest.json`. *"Sesion SMB anonima rechazada (enum4linux)"* (antes el rechazo se perdía).
   Se anuncia en consola con `STEP_ENUM4LINUX_NOTE sin_sesion`.
 - **No-clobber:** si `enum4linux.txt` ya existe, muestra `[SKIP]` y no lo sobrescribe; usá `--force`.
 - **Ética/alcance:** solo sobre infraestructura **autorizada**. Enumerar un dominio sin permiso es

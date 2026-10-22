@@ -244,10 +244,7 @@ REGLA ABSOLUTA — CERO REDACCIÓN MANUAL:
 
 TAREA:
 1. cd \$WORKSPACE && python3 scripts/organize_project.py
-2. python3 \$WORKSPACE/scripts/make_vuln_report.py --project \$CLIENTE
-3. find \$WORKSPACE/\$CLIENTE -name '*_resumen_*' 2>/dev/null
-4. Si no encuentra outputs: python3 \$WORKSPACE/scripts/make_vuln_report.py --project \$CLIENTE --dry-run
-5. Responde: >>> FASE4_OK | CLIENTE:\$CLIENTE | DIR:\$WORKSPACE/\$CLIENTE
+2. Responde: >>> FASE4_OK | CLIENTE:\$CLIENTE | DIR:\$WORKSPACE/\$CLIENTE
 
 Si error: >>> FASE4_ERROR | [error]" chat
 ```

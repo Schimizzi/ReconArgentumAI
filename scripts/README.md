@@ -41,7 +41,6 @@ Cada `.md` que acompaña a un script explica, sin código:
 | `php2shell_audit.py` | Auditoría **offline** de PHP2Shell (CVE-2026-109618/109619) sobre toda la evidencia: versión, SAPI, afectados (alimenta el check CK-10) | [▶ php2shell_audit.md](php2shell_audit.md) |
 | `resumen_exploit.py` | Pre-filtra la evidencia por target y arma un resumen compacto para el Agente 3 (Fase 2) | [▶ resumen_exploit.md](resumen_exploit.md) |
 | `organize_project.py` | Ordena y consolida toda la evidencia en la carpeta del cliente | [▶ organize_project.md](organize_project.md) |
-| `make_vuln_report.py` | Genera los informes de vulnerabilidades (Agente 6) — acumula corridas con horario | [▶ make_vuln_report.md](make_vuln_report.md) |
 | `hydra_audit.sh` | Auditoría **manual** de credenciales débiles con Hydra (por target o `--all`) — fuera del pipeline, con límite de intentos y log central | [▶ hydra_audit.md](hydra_audit.md) |
 | `cleanup_engagement.sh` | Borra toda la evidencia del cliente y deja el repo listo para el próximo | [▶ cleanup_engagement.md](cleanup_engagement.md) |
 

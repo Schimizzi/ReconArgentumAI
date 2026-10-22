@@ -501,7 +501,7 @@ def write_target_outputs(ip, out_dir, results, urls_scan, estados=None,
     cmd = os.path.join(d, "iis_shortname_commands_outputs.txt")
     with open(cmd, "w", encoding="utf-8") as fh:
         fh.write("# iis_shortname_commands_outputs - %s (%s)\n" % (ip, now))
-        fh.write("# Evidencia humana de cada request; NO lo consume el Agente 6.\n")
+        fh.write("# Evidencia humana de cada request; no se consume en el pipeline.\n")
         for line in results.reqs:
             fh.write(line + "\n")
 

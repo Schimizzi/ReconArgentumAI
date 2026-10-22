@@ -289,8 +289,8 @@ def ck10_php2shell():
 
     Para cada target auditado por `php2shell_audit.py` con estado `affected` o
     `eol_sin_parche`, exige que los CVEs del advisory estén presentes en
-    `cve_research/<target_id>_cves.json` (que es lo que consumen el Agente 6 y los
-    entregables). Desactivable con QA_PHP2SHELL_BLOCKING=0 (queda como aviso).
+    `cve_research/<target_id>_cves.json` (el artefacto que consume la Fase 5).
+    Desactivable con QA_PHP2SHELL_BLOCKING=0 (queda como aviso).
     """
     audits = glob(os.path.join(WS, "cve_research", "*_php2shell.json"))
     if not audits:

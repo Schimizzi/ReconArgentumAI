@@ -160,8 +160,7 @@ hermes -p reporter -z "IDIOMA: ESPAÑOL ESTRICTO.
 WORKSPACE=/ruta/a/tu/workspace
 CLIENTE=\$(jq -r '.engagement_id' \$WORKSPACE/config/scope.json)
 1. cd \$WORKSPACE && python3 scripts/organize_project.py
-2. python3 \$WORKSPACE/scripts/make_vuln_report.py --project \$CLIENTE
-3. >>> FASE4_OK | CLIENTE:\$CLIENTE | DIR:\$WORKSPACE/\$CLIENTE
+2. >>> FASE4_OK | CLIENTE:\$CLIENTE | DIR:\$WORKSPACE/\$CLIENTE
 " chat
 ```
 

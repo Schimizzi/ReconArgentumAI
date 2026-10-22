@@ -20,7 +20,6 @@
 | php2shell_audit.py | `WS/scripts/php2shell_audit.py` | Auditoría offline PHP2Shell (CVE-2026-109618/619) → alimenta CK-10 | `python3 WS/scripts/php2shell_audit.py --all` (o `--target-ip X`) |
 | php2shell_check.sh | `WS/scripts/host/php2shell_check.sh` | Verificación **en campo** PHP2Shell (VM con VPN): pasiva / fingerprint / detect / host-check | `bash WS/scripts/host/php2shell_check.sh --target X --passive` |
 | organize_project.py | `WS/scripts/organize_project.py` | Consolida outputs/ en dir proyecto (Fase 4) | `cd $WS && python3 scripts/organize_project.py` |
-| make_vuln_report.py | `WS/scripts/make_vuln_report.py` | Genera resúmenes de hallazgos (Fase 4) | `python3 WS/scripts/make_vuln_report.py --project CLIENTE` |
 
 ### Archivos de configuración
 | Archivo | Ruta | Uso |
@@ -44,7 +43,7 @@
 |---|---|---|
 | ReconBot | `~/.hermes/profiles/recon` | Ejecuta Fase 1 (run_fase1_run3.sh) |
 | AnalystBot | `~/.hermes/profiles/analyst` | Ejecuta Fase 2a (CVE Research) y Fase 2b (Exploitation Plan) |
-| ReporterBot | `~/.hermes/profiles/reporter` | Ejecuta Fase 4 (organize+make_vuln_report) y Fase 5 (QA) |
+| ReporterBot | `~/.hermes/profiles/reporter` | Ejecuta Fase 4 (organize_project) y Fase 5 (QA) |
 | OrchestratorBot | `~/.hermes/profiles/orchestrator` | Eres TÚ. Punto de contacto con el usuario.
 ---
 
@@ -257,13 +256,9 @@ REGLA ABSOLUTA: CERO REDACCIÓN MANUAL. Solo ejecuta scripts.
    (Si error 'No existe evidence/': DETENER. Falta Fase 1.)
    Si error no crítico: python3 \$WORKSPACE/scripts/organize_project.py --dry-run
 
-2. python3 \$WORKSPACE/scripts/make_vuln_report.py --project \$CLIENTE
-   Si error 'No existe .../CLIENTE/': ejecuta organize_project.py primero.
-   Si quiere depurar: python3 \$WORKSPACE/scripts/make_vuln_report.py --project \$CLIENTE --dry-run
+2. Verifica: ls \$WORKSPACE/\$CLIENTE
 
-3. Verifica: find \$WORKSPACE/\$CLIENTE -name '*_resumen_*' 2>/dev/null
-
-4. Responde: >>> FASE4_OK | CLIENTE:\$CLIENTE | DIR:\$WORKSPACE/\$CLIENTE | EN \$WORKSPACE/\$CLIENTE/*/
+3. Responde: >>> FASE4_OK | CLIENTE:\$CLIENTE | DIR:\$WORKSPACE/\$CLIENTE | EN \$WORKSPACE/\$CLIENTE/*/
    Error: >>> FASE4_ERROR | [error exacto]" chat
 ```
 
@@ -271,14 +266,6 @@ REGLA ABSOLUTA: CERO REDACCIÓN MANUAL. Solo ejecuta scripts.
 ```
 ✅ Listo. Estructura en: <engagement_id>/
 ```
-make_vuln_report.py emite:
-```
-✅ <IP> analizado. N hallazgos extraídos de los archivos fuente.
-Archivos generados:
-- .../<target_id>_resumen_vulnerabilidades.doc
-- .../<target_id>_resumen_breve.txt
-```
-O si sin hallazgos: `⚠️ <IP>: No se encontraron hallazgos explícitos...`
 
 **CRITERIO DE BLOQUEO:**
 - `❌ No existe evidence/ — corre primero el pipeline.` → FALTA FASE 1. DETENER.
@@ -345,15 +332,11 @@ bash scripts/host/validate_step11_12.sh <IP> --ev-dir evidence/<IP>
 bash scripts/host/validate_step11_12.sh <IP> --creds usuario@dominio:password
 # 3) Corrida completa de UN target + contrato del manifest (12 entradas)
 bash scripts/host/validate_step11_12.sh <IP> --full
-# 4) Consolidador + QA final sobre el cliente
-bash scripts/host/validate_step11_12.sh <IP> --project CLIENTE
-# 5) Ver qué haría, sin tocar nada
+# 4) Ver qué haría, sin tocar nada
 bash scripts/host/validate_step11_12.sh <IP> --dry-run
-# 6) SOLO V-08a (Agente 6 aislado, SIN trafico) — re-verificar el reporte tras tocar make_vuln_report.py
-bash scripts/host/validate_step11_12.sh <IP> --v08a-only
 ```
 
-Checks V-01..V-08:
+Checks V-01..V-07:
 
 | Check | Qué verifica |
 |---|---|
@@ -364,8 +347,6 @@ Checks V-01..V-08:
 | V-05 | Step 12: `STEP_ENUM4LINUX_DONE` con workgroup del XML **o** skip correcto (`skipped_no_smb` / `skipped_unsupported_os` en macOS) |
 | V-06 | (con `--creds`) el password NO queda en la evidencia ni en `/tmp`, y se generan users/SPN |
 | V-07 | (con `--full`) manifest con **12 entradas**, step 11 = `ldap_enum`, step 12 = `enum4linux`, y `_step.log` con 12 líneas `Step N/12` |
-| V-08a | **Agente 6 aislado** (corre siempre): staging temporal con symlinks -> `make_vuln_report.py` y verifica que el reporte incluya los hallazgos que la evidencia **puede** producir (*expectation-aware*): LDAP sólo si hay `ldapsearch*.txt`; enum4linux sólo si hay `enum4linux.*`, o el hallazgo de **sesión SMB anónima rechazada** si hay nota `*_sin_sesion.txt`; dedupe de usuarios cuando hay evidencia AD. Sin evidencia AD informa `[SKIP]` (antes daba 2 falsos positivos). **No toca `CLIENTE/`** |
-| V-08b | (con `--project`) cadena de produccion: `organize_project.py --target --no-clobber` + `make_vuln_report.py` + `qa_check.py` con `SCOPE_FILTER_IP` (CK-02/CK-09 solo de ese target). **Escribe en el proyecto** |
 
 > 🔁 **Re-run de un target (`--full`)**: el script hace **backup automático** de la evidencia previa
 > en `/tmp/backup_<IP>_<timestamp>` (`--no-backup` lo omite). Motivo: el `manifest.json` declara sus
@@ -394,7 +375,6 @@ Checks V-01..V-08:
 | TARGET_FASE1_INCOMPLETE | F1 | 🟡 PARCIAL | SALTAR target. Continuar resto. |
 | vulnx no instalado | F2a | 🟡 ADVERTENCIA | CONTINUAR sin CVEs. |
 | organize fail (sin evidence) | F4 | 🔴 BLOQUEANTE | DETENER. Falta Fase 1. |
-| make_vuln fail (sin project) | F4 | 🟡 RECUPERABLE | Ejecutar organize primero. |
 | QA_CHECK CK-01 fail | F5 | 🔴 BLOQUEANTE | DETENER. Corregir `config/scope.json` (target_id únicos) y re-ejecutar preflight. |
 | QA_CHECK CK-04/CK-05/CK-07/CK-10 fail | F5 | 🔴 BLOQUEANTE | DETENER. Ver detalle del check. |
 | QA_CHECK CK-02 fail | F5 | 🟡 PARCIAL | SALTAR target afectado. Continuar. |

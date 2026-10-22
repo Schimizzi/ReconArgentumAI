@@ -56,9 +56,9 @@ bash scripts/check_gobuster_urls.sh --target 10.155.10.15 --dry-run
 
 | Archivo | Para quién | Qué contiene |
 |---|---|---|
-| `gobuster_evidence.txt` | **El Agente 6 / generador de informes** | Los hallazgos en texto (una línea por hallazgo). Se incorpora automáticamente al informe del equipo. |
-| `gobuster_evidence.json` | **El Agente 6 / generador de informes** | Lo mismo en formato JSON (el consolidador lo detecta solo). |
-| `gobuster_commands_outputs.txt` | **Auditoría humana (vos)** | **Cada comando `curl` ejecutado + su salida completa** (headers y body) por cada URL. Es la evidencia de lo que se hizo; **NO lo lee el Agente 6**. |
+| `gobuster_evidence.txt` | **Revisión manual** | Los hallazgos en texto (una línea por hallazgo). Se incorpora automáticamente al informe del equipo. |
+| `gobuster_evidence.json` | **Revisión manual** | Lo mismo en formato JSON (el consolidador lo detecta solo). |
+| `gobuster_commands_outputs.txt` | **Auditoría humana (vos)** | **Cada comando `curl` ejecutado + su salida completa** (headers y body) por cada URL. Es la evidencia de lo que se hizo; **No se consume en el pipeline.** |
 
 > **Sin duplicados "de sitio":** los chequeos que dependen del **servidor** (headers de
 > seguridad, versión del software) se reportan **una sola vez por sitio** (`host:puerto`), no por
@@ -145,7 +145,7 @@ No es el modo recomendado (no documenta por target), pero sigue funcionando para
 
 - Los chequeos son **pasivos** (solo leen, no modifican nada) y **no siguen enlaces**.
 - El script **no asigna severidad** a los hallazgos de `gobuster_evidence.*`: eso lo decide el
-  analista al momento de reportar. El informe del Agente 6 los mostrará como
+  analista al momento de reportar. Aparecerán como
   **"Severidad: No declarada en fuente"**, y ahí se le asigna la gravedad final a mano.
 - El script trabaja los targets que tienen carpeta consolidada en `CLIENTE/` con evidencia de un
   escaneo ya autorizado (respeta el `config/scope.json`).
