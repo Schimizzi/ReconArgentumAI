@@ -59,6 +59,7 @@
 - **MODO D (datos):** `CLIENTE/gobuster_checks_old`, `tools/WhatWeb/.git`, archivar los 4 changes restantes
   al 100% de tareas no-sync. **Backups `.backup_pre_*`: NO TOCAR** (decisión del usuario).
 - **MODO D (código citado, no borrado en B):** `cves_md.py`, `gobuster_urls.sh`, `post_step1_open_ports.sh`
+  (documentados como MANUAL/HUÉRFANO en Lote 2).
 
 ---
 
@@ -76,5 +77,3 @@
 
 **Verificación final:** `qa_check.py` → **102/102 PASS, 0 FAIL** · `tests/test_agente4_field_evidence.py` 16 PASS · `bash -n` OK · `compileall` OK.
 **Rollback:** `git revert` de los 4 commits; datos recuperables desde `plans/.backup_cleanup_2026-10-22/resumen_vulnerabilidades_2026-10-22.tar.gz`.
-
-  (documentados como MANUAL/HUÉRFANO en Lote 2).
