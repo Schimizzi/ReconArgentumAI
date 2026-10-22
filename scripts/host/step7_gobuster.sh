@@ -98,7 +98,6 @@ case "$MODE" in
       -s 200,204,301,307,403 \
       -b '' \
       -k \
-      --force \
       -x txt,bak,old,zip; then
       echo "STEP7_HOST_FAIL mode=dir port=${PORT}" >&2
       exit 1
