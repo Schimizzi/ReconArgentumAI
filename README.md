@@ -478,7 +478,7 @@ ReconArgentumAI/
 ├── specs/                            # Specs operativas de cada agente
 ├── openspec/
 │   ├── config.yaml                   # Config OpenSpec
-│   ├── specs/                        # 7 capacidades (specs formales sincronizadas)
+│   ├── specs/                        # 6 capacidades (specs formales sincronizadas)
 │   └── changes/                      # Changes activos + archive/
 ├── tools/
 │   ├── *_help.md                     # Help files verificados (9)
