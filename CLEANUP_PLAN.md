@@ -2,7 +2,7 @@
 
 > **Rama:** `chore/cleanup-audit` · **Fecha:** 2026-10-22.
 > **Invariantes por lote:** un lote = un commit atómico `chore(cleanup): <lote>` · después de CADA lote
-> `python3 scripts/qa_check.py` debe dar **107/107 PASS** · backup previo (git o `plans/.backup_cleanup_2026-10-22/`) ·
+> `python3 scripts/qa_check.py` debe dar **107/107 PASS** (línea base que luego pasó a **102/102** al retirar CK-08 — ver §Cambio posterior) · backup previo (git o `plans/.backup_cleanup_2026-10-22/`) ·
 > sin `push`, sin `reset --hard`, sin reescribir historia · si el QA baja o algo se rompe → `git revert` del commit
 > y re-clasificar el ítem como DUDA.
 
@@ -54,8 +54,27 @@
 ## Fuera de alcance (propuesta, requiere MODO C o D)
 
 - **MODO C:** `scripts/lib/evidencia.py` (load_json/jsonl, warn, ofuscar, get_target_id, parsers nmap) +
-  modularizar `make_vuln_report.py` / `check_gobuster_urls.sh`. Migración script por script con QA verde.
+  modularizar `check_gobuster_urls.sh`. Migración script por script con QA verde. *(El target
+  `make_vuln_report.py` ya no aplica: fue removido — ver §Cambio posterior.)*
 - **MODO D (datos):** `CLIENTE/gobuster_checks_old`, `tools/WhatWeb/.git`, archivar los 4 changes restantes
   al 100% de tareas no-sync. **Backups `.backup_pre_*`: NO TOCAR** (decisión del usuario).
 - **MODO D (código citado, no borrado en B):** `cves_md.py`, `gobuster_urls.sh`, `post_step1_open_ports.sh`
+
+---
+
+## Cambio posterior ejecutado (2026-10-22) — Remoción del Agente 6 (fuera del alcance de MODO B)
+
+> Aprobado aparte por el usuario. Detalle completo en **`AUDIT_REPORT.md §9`**.
+
+| Lote | Commit | Cambio |
+|---|---|---|
+| 1 | `c0f1114` | `git rm scripts/make_vuln_report.py scripts/make_vuln_report.md specs/agent_6_consolidador_hallazgos.md` |
+| 2 | `784ef4c` | Código: `qa_check.py` (CK-08 fuera, 10→9 checks), `organize_project.py`, `validate_step11_12.sh/.md` (V-08a/b + `--project`/`--v08a-only` fuera) |
+| 3 | `201f4d6` | Docs/orquestación: `README.md`, `RUNBOOK.md`, `SOULs/*`, `.cline/master_prompt.md(+.template)`, `scripts/qa_check.md`, docs de steps, `tools/enum4linux_help.md` |
+| 4 | `5637d81` | OpenSpec: `git rm -r openspec/specs/consolidador-hallazgos/` + Requirement CK-08 en `openspec/specs/qa-validation/spec.md` |
+| 5 | *(sin commit, gitignored)* | Datos: backup + borrado de 100 `*_resumen_*` en `CLIENTE/` + regeneración de `CLIENTE/README.md` |
+
+**Verificación final:** `qa_check.py` → **102/102 PASS, 0 FAIL** · `tests/test_agente4_field_evidence.py` 16 PASS · `bash -n` OK · `compileall` OK.
+**Rollback:** `git revert` de los 4 commits; datos recuperables desde `plans/.backup_cleanup_2026-10-22/resumen_vulnerabilidades_2026-10-22.tar.gz`.
+
   (documentados como MANUAL/HUÉRFANO en Lote 2).

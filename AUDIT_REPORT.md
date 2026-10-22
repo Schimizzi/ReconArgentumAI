@@ -2,7 +2,8 @@
 
 > **Proyecto:** ReconArgentumAI — pipeline de pentest multi-agente (academia/lab).
 > **Rama:** `chore/cleanup-audit` · **Fecha:** 2026-10-22 · **Modo:** B (auditoría + limpieza segura por lotes).
-> **Baseline QA verificado:** `python3 scripts/qa_check.py` → **107/107 PASS | 0/107 FAIL**.
+> **Baseline QA del inventario:** `python3 scripts/qa_check.py` → **107/107 PASS | 0/107 FAIL**
+> (al momento de la auditoría). La línea base **actual** es **102/102** tras retirar CK-08 (ver **§9**).
 > **Regla de oro aplicada:** sólo es elegible para borrado lo que tenga **0 referencias** en código, docs,
 > specs, `.clinerules`, SOULs, master_prompt, YAML, Dockerfile y entrypoints de shell. Todo lo demás = propuesta.
 
@@ -73,7 +74,7 @@ run_target.sh          ─► DAG 12 steps + helpers                            
 | `cve_research_vulnx.py` | LLM / RUNBOOK §F2a | `cve_research/*_cves.json` | nmap/whatweb/nuclei/advisories | `specs/agent_4_cve_research.md` | VIVO |
 | `resumen_exploit.py` | LLM / RUNBOOK §F2b | resumen Agente 3 | evidence | `resumen_exploit.md` | VIVO |
 | `organize_project.py` | RUNBOOK §F4 | `CLIENTE/<ip>/{data,outputs}` | evidence/plans/cve_research | `organize_project.md` | VIVO |
-| `make_vuln_report.py` | RUNBOOK §F4 | `*_resumen_vulnerabilidades.doc` + `_resumen_breve.txt` | `CLIENTE/<ip>/outputs/` | `make_vuln_report.md` | VIVO |
+| ~~`make_vuln_report.py`~~ | — | — | — | — | **REMOVIDO (§9)** |
 | `qa_check.py` | RUNBOOK §F5 | stdout `[PASS]/[FAIL]` (CK-01..CK-10) | todos los artefactos | `qa_check.md` | VIVO |
 | `php2shell_audit.py` | CK-10 / RUNBOOK | `plans/php2shell_<fecha>.md` | evidence | `php2shell_audit.md` | VIVO |
 | `check_gobuster_urls.sh` | manual (flujo IIS histórico) | `gobuster_evidence.txt` + findings | `CLIENTE/` | `check_gobuster_urls.md` | MANUAL |
@@ -116,6 +117,10 @@ tienen ≥1 cita en documentación). Elegible para borrado en B sólo la basura 
 
 ## 4. Fase C — Duplicación y optimización (propuesta MODO C)
 
+> ⚠️ **Actualizado 2026-10-22:** `make_vuln_report.py` fue **removido** (§9); las copias que se le
+> atribuían en esta tabla ya no existen → la duplicación efectiva bajó. El resto sigue vigente (ahora
+> sólo `organize_project.py` y `resumen_exploit.py` comparten esas helpers/parsers).
+
 | Función | Copias | Evidencia |
 |---|---|---|
 | `load_json` | 3 | `host/detect_tls_ports.py:39`, `organize_project.py:97`, `make_vuln_report.py:147` |
@@ -128,7 +133,7 @@ tienen ≥1 cita en documentación). Elegible para borrado en B sólo la basura 
 | Parsers Nmap | 4 | `resumen_exploit.py:120`, `cve_research_vulnx.py:786`, `make_vuln_report.py:465`, `organize_project.py:270` |
 | `main()` | 8 | normal en CLIs (no es defecto) |
 
-Scripts gigantes: `make_vuln_report.py` (1180 líneas/51 KB), `cve_research_vulnx.py` (1144+/53 KB),
+Scripts gigantes: `cve_research_vulnx.py` (1144+/53 KB),
 `check_gobuster_urls.sh` (857/38 KB), `php2shell_audit.py` (32 KB), `step9_iis_shortname_scan.py` (33 KB).
 Sintaxis: `bash -n` **OK** en todos los `.sh`; `python3 -m compileall -q scripts` **OK**.
 
@@ -188,4 +193,40 @@ Test Agente 4 en `/tmp/test_agente4_field_evidence.py` (3537 B) → promover a `
    *Propuesta: sanear la plantilla versionada.*
 3. Duplicación Python (§4) → librería compartida `scripts/lib/` (MODO C).
 4. `tools/WhatWeb/.git`, `gobuster_checks_old`, OpenSpec archive restante (MODO D).
+
+---
+
+## 9. Cambio posterior ejecutado — Remoción del Agente 6 (`make_vuln_report.py`) — 2026-10-22
+
+> **Aprobado aparte por el usuario** (limpieza técnica, no refactor). Motivo declarado: el reporte
+> `.doc`/`.txt` no aportaba valor antes de completar las comprobaciones manuales.
+
+**Eliminado (rama `chore/cleanup-audit`):**
+- `scripts/make_vuln_report.py` (Agente 6, 1180 líneas) + `scripts/make_vuln_report.md`
+- `specs/agent_6_consolidador_hallazgos.md`
+- `openspec/specs/consolidador-hallazgos/` (capability) → OpenSpec pasa de 7 a **6 capacidades**
+- Requisito **CK-08** (`openspec/specs/qa-validation/spec.md`) y su check en `scripts/qa_check.py`
+- **V-08a/V-08b** + flags `--project`/`--v08a-only` en `scripts/host/validate_step11_12.sh` (+ `.md`)
+- Bloque del Agente 6 en `scripts/organize_project.py`
+- Datos: **100** archivos `*_resumen_*` en `CLIENTE/` — backup en
+  `plans/.backup_cleanup_2026-10-22/resumen_vulnerabilidades_2026-10-22.tar.gz` (205 KB)
+
+**Commits:** `c0f1114` (archivos), `784ef4c` (código), `201f4d6` (docs), `5637d81` (openspec)
++ Lote 5 (datos `CLIENTE/`, sin commit por estar gitignored).
+
+**Impacto:**
+| Área | Antes | Después |
+|---|---|---|
+| QA (`qa_check.py`) | 107/107 | **102/102** (CK-08 retirado) |
+| Agentes vigentes | 1, 3, 4, 6, 7 (+Orchestrator) | **1, 3, 4, 7** (+Orchestrator) |
+| Capacidades OpenSpec | 7 | **6** |
+| Validador Steps 11/12 | V-01..V-08 | **V-01..V-07** |
+
+**Verificación:** `qa_check.py` **102/102** · `tests/test_agente4_field_evidence.py` **16 PASS** ·
+`bash -n` de todos los `.sh` **OK** · `compileall` **OK** · **0** referencias a "Agente 6" fuera de
+`openspec/changes/**` (histórico/propuestas) y `plans/`.
+
+**Residual no bloqueante:** `openspec/changes/**` y `plans/php2shell_2026-10-22_cierre.md` conservan
+menciones históricas (registro/dato). `README.md:59` menciona la retirada a propósito. Las secciones
+§1–§8 de este documento son el **snapshot previo** a la remoción.
 
