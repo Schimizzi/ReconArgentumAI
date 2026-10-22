@@ -1,5 +1,10 @@
 # `gobuster_urls.sh` — Qué hace (guía sin saber de código)
 
+> 🖐️ **USO MANUAL — FUERA DEL PIPELINE AUTOMATIZADO (2026-10-22).** Ningún step ni agente lo invoca.
+> Se conserva como utilidad **manual** para armar la lista de URLs a mano. Su función se superpone con
+> `build_urls()` de `scripts/check_gobuster_urls.sh` (que la resuelve internamente); unificarlos es una
+> propuesta de refactor (MODO C), no un borrado.
+
 ## 🧩 ¿Qué es?
 
 Arma una **lista única de direcciones web** a partir de todos los resultados de la herramienta

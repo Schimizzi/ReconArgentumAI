@@ -1,5 +1,9 @@
 # `cves_md.py` — Qué hace (guía sin saber de código)
 
+> 🖐️ **USO MANUAL — FUERA DEL PIPELINE AUTOMATIZADO (2026-10-22).** Este script **no** es invocado por
+> ningún step ni agente del pipeline (0 imports / 0 llamadas a `build_cves_md`). Se conserva como utilidad
+> **opcional a demanda**. El flujo actual arma los entregables con `organize_project.py` + `make_vuln_report.py`.
+
 ## 🧩 ¿Qué es?
 
 Es una **utilidad de conversión opcional**: convierte la investigación de vulnerabilidades (CVE),

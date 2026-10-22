@@ -1,7 +1,7 @@
 # Spec operativa — Recon Pipeline (Fase 1)
 
 > Instrucción operativa que el **Orchestrator** lee ANTES de ejecutar la Fase 1.
-> Complementa: `openspec/changes/add-pentest-recon-pipeline/specs/recon-pipeline/spec.md` (contrato formal),
+> Complementa: `openspec/specs/recon-pipeline/spec.md` (contrato formal),
 > `SOULs/orchestrator/SOUL.md` (rol y guardrails R1-R5) y `config/approved_commands.md` (única fuente de comandos).
 > `<WORKSPACE>` = raíz del proyecto. Todos los paths son relativos a `<WORKSPACE>` (ver `SOULs/orchestrator/SOUL.md` §Constantes).
 

@@ -39,7 +39,7 @@ Las cinco fases y sus agentes se detallan en [Arquitectura Multi-Agente](#-arqui
 | 🔒 **Ofuscación automática de credenciales** | Cualquier *password, token, API key o credencial* descubierta se redacta como `***` en los reportes. La evidencia original no se toca. |
 | 🕶️ **Sigilo dinámico (stealth)** | Delay entre herramientas (30 s) y entre targets (5 min), rate-limits y timeouts parametrizados desde `config/stealth.yaml`. **Nada hardcodeado**. Adaptación ante WAF/tarpits (sube timeouts, baja rates). |
 | 🎯 **Ranking inteligente de CVEs** | Top 3-5 CVEs por servicio con orden estricto: **exploit público verificado > impacto crítico (RCE/auth-bypass/SQLi) > CVSS**. Cada CVE con `rank_reason` documentado. |
-| ✅ **QA determinista antes de entregar** | 8 comprobaciones mecánicas **sin LLM** (`scripts/qa_check.py`) validan integridad, consistencia, trazabilidad y ofuscación. Si falla un check crítico, la entrega se bloquea. |
+| ✅ **QA determinista antes de entregar** | 10 checks deterministas **sin LLM** (`scripts/qa_check.py`, CK-01…CK-10) validan integridad, consistencia, trazabilidad y ofuscación. Si falla un check crítico, la entrega se bloquea. |
 | 📦 **Entregables consolidados por target** | `organize_project.py` ordena la evidencia en `CLIENTE/<target>/` y `make_vuln_report.py` (Agente 6) genera los resúmenes `.doc` + `.txt`, todos con paths absolutos de trazabilidad. |
 
 ## 🧩 Arquitectura Multi-Agente

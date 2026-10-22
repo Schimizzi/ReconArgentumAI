@@ -34,6 +34,7 @@ Cada `.md` que acompaña a un script explica, sin código:
 | `check_gobuster_urls.sh` | Revisa las URLs descubiertas buscando pistas de vulnerabilidades (headers, listados, credenciales, métodos peligrosos…) | [▶ check_gobuster_urls.md](check_gobuster_urls.md) |
 | `gobuster_urls.sh` | Arma la lista única de URLs a partir de los resultados de Gobuster | [▶ gobuster_urls.md](gobuster_urls.md) |
 | `install_host_tools.sh` | Instala las herramientas de pentest en la Mac (una sola vez) | [▶ install_host_tools.md](install_host_tools.md) |
+| `install_souls.sh` | Instala los 4 perfiles (SOUL) de Hermes Agent en `~/.hermes/profiles/` (uso manual) | [▶ install_souls.md](install_souls.md) |
 | `xml_to_nmap_json.py` | Convierte el XML de Nmap a JSON | [▶ xml_to_nmap_json.md](xml_to_nmap_json.md) |
 | `cves_md.py` | Convierte la investigación CVE a un documento legible | [▶ cves_md.md](cves_md.md) |
 | `cve_research_vulnx.py` | Investiga CVEs de cada servicio/tecnología con `vulnx` + watchlist local de advisories (Agente 4, Fase 2) | [▶ cve_research_vulnx.md](cve_research_vulnx.md) |
