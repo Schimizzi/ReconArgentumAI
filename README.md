@@ -2,8 +2,6 @@
 
 > **AI-driven Pentesting** — Pipeline automatizado, multi-agente y guiado por IA para el reconocimiento y análisis de infraestructura autorizada.
 
-[![Pipeline](https://img.shields.io/badge/Pipeline-10%20Steps%20·%209%20Tools-6f42c1)]() [![Fases](https://img.shields.io/badge/Fases-5-brightgreen)]() [![IA-Agnóstico](https://img.shields.io/badge/IA-Agnóstico-blue)]() [![Kali-Ready](https://img.shields.io/badge/Kali-Ready-00a859)]()
-
 ReconArgentumAI es una **plataforma de pentesting de infraestructura** que orquesta un pipeline de *recon* de **12 pasos sobre 11 herramientas** de seguridad, dirigido por un **modelo de IA** (agnóstico del proveedor) a través de Cline / Roo Code o Hermes Agent. El sistema **no explota nada**: produce evidencia completa en disco, planes de explotación documentados y **entregables por target** (`_resumen_vulnerabilidades.doc` + `_resumen_breve.txt`), siguiendo guardrails de scope, stealth y ofuscación inquebrantables.
 
 Pensado para **red teams, auditores y equipos de seguridad ofensiva** que quieren *recon* reproducible, trazable y de bajo ruido, tanto contra **Internet** como contra la **LAN local** — desde una misma herramienta. Opcionalmente, la **Fase 1 (Recon)** puede ejecutarse **sin LLM** de forma totalmente automática (<code>--auto</code>), delegando la orquestación a scripts portables que deciden estados <code>success / failed / skipped_*</code>, retry 1x y delays desde configuración.
