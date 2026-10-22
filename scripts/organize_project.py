@@ -457,10 +457,7 @@ def build_readme(project_name, infos):
     L.append(
         "> ℹ️ **Hallazgos crudos** = filas de evidencia (Nuclei + Nikto) contadas **sin**\n"
         "> filtrar ni deduplicar por `scripts/organize_project.py` — es un volumen crudo de\n"
-        "> señales de las tools, NO el conteo final de vulnerabilidades. El detalle\n"
-        "> consolidado, filtrado y deduplicado por target está en\n"
-        "> `<target_id>_resumen_breve.txt` y `<target_id>_resumen_vulnerabilidades.doc`\n"
-        "> (generados por el **Agente 6** — `scripts/make_vuln_report.py`)."
+        "> señales de las tools, NO el conteo final de vulnerabilidades."
     )
     L.append("")
     L.append("### Estructura por target")
