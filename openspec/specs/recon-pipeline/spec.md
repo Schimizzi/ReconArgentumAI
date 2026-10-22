@@ -187,3 +187,43 @@ El sistema SHALL implementar un mecanismo de bloqueo por target mediante `mkdir`
 - **WHEN** una segunda instancia de `run_target.sh` se ejecuta sobre un target que ya tiene un lock activo
 - **THEN** la segunda instancia aborta con el mensaje `R3-FAIL: otro pipeline está corriendo sobre X`
 - **AND** la primera instancia continúa sin interrupción y libera el lock al terminar (trap EXIT)
+
+### Requirement: Verificación de campo PHP2Shell (fuera del DAG)
+El sistema SHALL proveer una verificación **fuera del DAG** para advisories críticos de software web (`scripts/host/php2shell_check.sh`), de ejecución manual por el operador **desde la VM con VPN** y por target. El DAG SHALL permanecer en **12 steps** y el contrato del manifest NO SHALL alterarse por esta verificación. El script SHALL soportar cuatro modos: `--passive` (por defecto; `curl -sS/-I` sobre rutas estándar, sólo lectura, aprobado), `--fingerprint` (intenta revelar la versión de PHP donde el banner está oculto, ej. Drupal/IIS; requiere aprobación por target), `--detect` (prueba NO destructiva del path OOM: un request multipart con `session.upload_progress` y una cookie `PHPSESSID` larga/percent-encoded; **exige** `--authorized` y NO envía payloads de shell ni escribe archivos) y `--host-check` (corre en el servidor: `php -v`, `session.upload_progress`, backports del vendor en `rpm -q --changelog php` / `dpkg`). Los timeouts SHALL resolverse de `config/stealth.yaml` (`php2shell_timeout_seconds`, `php2shell_max_paths`). La evidencia SHALL quedar en `evidence/<target>/php2shell_passive.txt`, `php2shell_fingerprint.txt`, `php2shell_detect.txt`, `php2shell_hostcheck.txt`, `php2shell_result.json` y `php2shell_summary.txt`.
+
+#### Scenario: Verificación pasiva aprobada
+- **WHEN** el operador ejecuta `php2shell_check.sh --target <IP> --passive`
+- **THEN** el script hace GETs de sólo lectura a rutas estándar (y al easter egg de PHP), guarda los headers (`Server`, `X-Powered-By`, `Set-Cookie`) en `php2shell_passive.txt` y clasifica la versión contra la tabla del advisory
+
+#### Scenario: Versión afectada detectada
+- **WHEN** la respuesta incluye `X-Powered-By: PHP/8.2.31`
+- **THEN** `php2shell_result.json` registra `status: "affected"`, el SAPI probable y el script sale con exit code `2`
+
+#### Scenario: Ejecución de detección sin autorización
+- **WHEN** se invoca `--detect` sin `--authorized`
+- **THEN** el modo se SALTA con un mensaje explícito y NO se envía ningún request multipart
+
+#### Scenario: Host que oculta la versión
+- **WHEN** el target corre Drupal sobre IIS y el modo `--fingerprint` no logra exponer la versión
+- **THEN** el resultado queda `unknown_version` con el siguiente paso documentado (no se asume versión ni se listan CVEs)
+
+#### Scenario: Chequeo dentro del servidor
+- **WHEN** el operador ejecuta `--host-check` en el propio servidor PHP
+- **THEN** se guarda `php2shell_hostcheck.txt` con la versión, la configuración de sesión/memoria, el SAPI y el resultado de `rpm -q --changelog php | grep -i CVE-2026-10961[89]`
+
+
+### Requirement: Nota de sesión SMB anónima rechazada (Steps 10/12)
+Cuando los Steps 10 (`smbclient`) o 12 (`enum4linux`) descartan la evidencia cruda porque la **sesión anónima fue rechazada** (sin `Anonymous login` ni shares Disk accesibles en el Step 10; sin sesión estable ni datos en el Step 12), el sistema SHALL conservar una **nota** `smbclient_sin_sesion.txt` / `enum4linux_sin_sesion.txt` con el comando ejecutado y el motivo literal (ej. `NT_STATUS_LOGON_FAILURE`), SHALL declararla en `output[]` del `manifest.json` y SHALL emitir en consola `STEP_SMBCLIENT_NOTE sin_sesion` / `STEP_ENUM4LINUX_NOTE sin_sesion`. El Agente 6 SHALL reportarla como hallazgo informativo *"Sesion SMB anonima rechazada (<herramienta>)"* (severidad "No declarada en fuente", evidencia literal). El `status` del step NO cambia (`success`) y los **12 steps** del DAG y el vocabulario de estados quedan intactos.
+
+#### Scenario: Sesión anónima rechazada en el Step 12
+- **WHEN** `enum4linux-ng` no logra sesión anónima estable ni datos
+- **THEN** se eliminan `enum4linux.txt/.json/.yaml`, se conserva `enum4linux_sin_sesion.txt` con el motivo literal, el manifest la lista en `output[]` y el reporte incluye el hallazgo de rechazo
+
+#### Scenario: Sesión anónima rechazada en el Step 10
+- **WHEN** `smbclient -L //<IP> -N` no obtiene `Anonymous login` y no hay shares Disk accesibles
+- **THEN** se eliminan `smbclient_shares.txt`/`smbclient_<share>.txt`, se conserva `smbclient_sin_sesion.txt` con el motivo literal y el reporte incluye el hallazgo de rechazo
+
+#### Scenario: Sesión anónima aceptada o shares accesibles (sin cambios)
+- **WHEN** hay `Anonymous login` o al menos un share Disk accesible
+- **THEN** se conserva la evidencia cruda como hasta ahora (`smbclient_shares.txt` / `enum4linux.*`) y NO se genera la nota
+

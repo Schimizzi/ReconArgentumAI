@@ -36,7 +36,8 @@ Cada `.md` que acompaña a un script explica, sin código:
 | `install_host_tools.sh` | Instala las herramientas de pentest en la Mac (una sola vez) | [▶ install_host_tools.md](install_host_tools.md) |
 | `xml_to_nmap_json.py` | Convierte el XML de Nmap a JSON | [▶ xml_to_nmap_json.md](xml_to_nmap_json.md) |
 | `cves_md.py` | Convierte la investigación CVE a un documento legible | [▶ cves_md.md](cves_md.md) |
-| `cve_research_vulnx.py` | Investiga CVEs de cada servicio/tecnología con `vulnx` (Agente 4, Fase 2) | [▶ cve_research_vulnx.md](cve_research_vulnx.md) |
+| `cve_research_vulnx.py` | Investiga CVEs de cada servicio/tecnología con `vulnx` + watchlist local de advisories (Agente 4, Fase 2) | [▶ cve_research_vulnx.md](cve_research_vulnx.md) |
+| `php2shell_audit.py` | Auditoría **offline** de PHP2Shell (CVE-2026-109618/109619) sobre toda la evidencia: versión, SAPI, afectados (alimenta el check CK-10) | [▶ php2shell_audit.md](php2shell_audit.md) |
 | `resumen_exploit.py` | Pre-filtra la evidencia por target y arma un resumen compacto para el Agente 3 (Fase 2) | [▶ resumen_exploit.md](resumen_exploit.md) |
 | `organize_project.py` | Ordena y consolida toda la evidencia en la carpeta del cliente | [▶ organize_project.md](organize_project.md) |
 | `make_vuln_report.py` | Genera los informes de vulnerabilidades (Agente 6) — acumula corridas con horario | [▶ make_vuln_report.md](make_vuln_report.md) |
@@ -48,12 +49,17 @@ Cada `.md` que acompaña a un script explica, sin código:
 | Script | Qué hace (resumen) | Documento |
 |---|---|---|
 | `run_fase1_run3.sh` | Recorre todos los objetivos autorizados y los escanea uno por uno | [▶ run_fase1_run3.md](host/run_fase1_run3.md) |
-| `run_target.sh` | Director del escaneo de un solo objetivo (10 pasos) | [▶ run_target.md](host/run_target.md) |
+| `validate_step11_12.sh` | Validación asistida de los Steps 11/12 (LDAP + Enum4linux): incremental, gates, anti-fuga del password, contrato del manifest (12 entradas) y **V-08a expectation-aware** (`--v08a-only` corre sólo el check del reporte, sin tráfico) | [▶ validate_step11_12.md](host/validate_step11_12.md) |
+| `run_target.sh` | Director del escaneo de un solo objetivo (12 pasos) | [▶ run_target.md](host/run_target.md) |
 | `detect_tls_ports.py` | Detecta qué puertos usan cifrado TLS (para SSLyze) | [▶ detect_tls_ports.md](host/detect_tls_ports.md) |
 | `step9_iis_shortname_scan.py` | Detecta y enumera IIS Short File Name Disclosure (8.3) — integrado como Step 9, con modo manual `--proyecto CLIENTE` intacto | [▶ step9_iis_shortname_scan.md](host/step9_iis_shortname_scan.md) |
 | `step10_smbclient_enum.sh` | Enumeración anónima (null session) de recursos SMB (139/445) — integrado como Step 10, con modo manual `--all` intacto | [▶ step10_smbclient_enum.md](host/step10_smbclient_enum.md) |
+| `step11_ldap_enum.sh` | Enumeración LDAP/AD con `ldapsearch` — integrado como Step 11 (**Linux y macOS**), con creds opt-in y modo manual `--all` | [▶ step11_ldap_enum.md](host/step11_ldap_enum.md) |
+| `step12_enum4linux_enum.sh` | Enumeración AD anónima (enum4linux-ng) — integrado como Step 12, **solo Linux** (macOS: `skipped_unsupported_os`), con modo manual `--all` | [▶ step12_enum4linux_enum.md](host/step12_enum4linux_enum.md) |
+| `php2shell_check.sh` | **Fuera del DAG (manual, desde la VM):** verificación de PHP2Shell en campo — pasiva, fingerprint de versión, detección no invasiva y chequeo de backports del host | [▶ php2shell_check.md](host/php2shell_check.md) |
+| `php2shell_hostcheck_win.ps1` | **Verificación LOCAL en un host Windows/IIS** (PHP-Version desde binario/registro/handler de IIS) — para los Drupal 7/IIS donde la versión no es visible remotamente | [▶ php2shell_hostcheck_win.md](host/php2shell_hostcheck_win.md) |
 
-**Los 10 pasos del escaneo:**
+**Los 12 pasos del escaneo:**
 
 | Paso | Script | Qué herramienta usa | Documento |
 |---|---|---|---|
@@ -69,13 +75,15 @@ Cada `.md` que acompaña a un script explica, sin código:
 | 8 | `step8_sslyze.sh` | SSLyze — seguridad de conexiones cifradas | [▶ paso 8](host/step8_sslyze.md) |
 | 9 | `step9_iis_shortname_scan.py` | IIS Shortname 8.3 — solo si `web_on` y el `httpx.json` reporta `Server: Microsoft-IIS` | [▶ paso 9](host/step9_iis_shortname_scan.md) |
 | 10 | `step10_smbclient_enum.sh` | smbclient — comparte SMB (139/445) abiertos | [▶ paso 10](host/step10_smbclient_enum.md) |
+| 11 | `step11_ldap_enum.sh` | ldapsearch — LDAP/AD (root DSE; creds opt-in; Linux y macOS) | [▶ paso 11](host/step11_ldap_enum.md) |
+| 12 | `step12_enum4linux_enum.sh` | enum4linux-ng — enumeración AD anónima (solo Linux; 139/445 abiertos) | [▶ paso 12](host/step12_enum4linux_enum.md) |
 ---
 
 ## 🧭 Conceptos rápidos
 
 - **Script:** un archivo con pasos que la computadora ejecuta sola (una "receta").
 - **Terminal/consola:** la ventana donde se ejecutan a mano estos archivos.
-- **Pipeline:** el proceso completo de escaneo → análisis → informe (10 pasos).
+- **Pipeline:** el proceso completo de escaneo → análisis → informe (12 pasos).
 - **Objetivo (target):** el equipo (IP) de la red que se revisa, **siempre con autorización**.
 - **Herramientas:** programas como Nmap, HTTPX, Nuclei, Nikto, Gobuster o SSLyze; los scripts los
   organizan y automatizan.

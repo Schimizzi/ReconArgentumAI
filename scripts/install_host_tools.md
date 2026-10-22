@@ -33,6 +33,8 @@ bash scripts/install_host_tools.sh
 | `jq` | Procesa archivos JSON en scripts | `brew` |
 | `smbclient` | Enumera recursos compartidos SMB | `brew install samba` |
 | `python3` | Ejecuta scripts Python del pipeline | `brew` |
+| `ldapsearch` | Enumeración LDAP/AD del Step 11 (Linux y macOS) | `ldap-utils` (ya presente en macOS `/usr/bin`) |
+| `enum4linux-ng` | Enumeración AD anónima del Step 12 - **solo Linux** | `sudo apt install enum4linux-ng` (no aplica en macOS) |
 
 También verifica al final que todas las herramientas queden accesibles y guarda un registro del
 proceso en `/tmp/tools_install2.log`.
@@ -40,5 +42,6 @@ proceso en `/tmp/tools_install2.log`.
 ## ⚠️ Notas
 
 - Está pensado para **macOS** (usa Homebrew y pipx).
+- `enum4linux-ng` **no aplica en macOS**: el Step 11 del pipeline solo corre en Linux/Debian (o el contenedor Docker).
 - WhatWeb no tiene instalador automático oficial, por eso se clona en la carpeta `tools/WhatWeb/`.
 - Si una herramienta ya está instalada, la detecta y no la reinstala.

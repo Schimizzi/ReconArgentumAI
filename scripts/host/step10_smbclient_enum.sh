@@ -362,6 +362,18 @@ echo "STEP_SMBCLIENT_DONE $TARGET ports=${SMB_PORTS} shares_disk=${N_DISK} acces
 if [ "$CALIFICA" -eq 1 ]; then
   echo "Evidencia: $TGT_DIR/smbclient_shares.txt + smbclient_<share>.txt → detectada por el Agente 6 en la próxima corrida."
 else
+  # D (2026-10-22): la evidencia cruda se descarta (es ruido sin hallazgo), pero se
+  # conserva una NOTA con el motivo LITERAL. Sin ella el manifest quedaba con
+  # `success` + output [] sin explicacion y el reporte no documentaba el rechazo
+  # de la sesion anonima (hallazgo informativo que si interesa al cliente).
+  REASON=$(grep -m3 -iE 'NT_STATUS_[A-Z_]+|Unable to connect|Connection refused|session setup failed' "$SHARES_LIST" 2>/dev/null | head -3)
   rm -f "$SHARES_LIST" "$TGT_DIR"/smbclient_*.txt
+  NOTE="$TGT_DIR/smbclient_sin_sesion.txt"
+  {
+    echo "# smbclient -L //$IP -N -t ${SMB_TIMEOUT}s (null session, solo lectura)"
+    echo "# resultado: sin 'Anonymous login' y 0 shares Disk accesibles (rc distinto de 0)"
+    if [ -n "${REASON:-}" ]; then printf '%s\n' "$REASON"; fi
+  } > "$NOTE"
+  echo "STEP_SMBCLIENT_NOTE sin_sesion $TARGET -> smbclient_sin_sesion.txt"
   echo "smbclient: $TARGET sin login anónimo ni shares accesibles → evidencia NO conservada"
 fi

@@ -41,6 +41,7 @@ python3 scripts/cve_research_vulnx.py \
 | `--output` | No | Path de salida (por defecto `cve_research/<target_id>_cves.json`) |
 | `--dry-run` | No | Muestra el resumen y **no** escribe el JSON |
 | `--no-relevance-filter` | No | Desactiva el filtro anti falso positivo (ver §7) |
+| `--no-patched-filter` | No | Desactiva el descarte de CVEs cuyo **fix declarado ya está aplicado** (ver §7) |
 
 Antes de usarlo, `vulnx` tiene que estar instalado (una sola vez):
 
@@ -57,6 +58,9 @@ export PDCP_API_KEY="<tu-api-key>"   # se obtiene en https://cloud.projectdiscov
   - `evidence/<target>/nmap_detailed.json` → servicios y versiones.
   - `evidence/<target>/whatweb.json` → tecnologías web (opcional).
   - `evidence/<target>/nuclei.json` → CVEs ya detectados por Nuclei (opcional).
+  - `evidence/<target>/php2shell_*.txt` → **verificación de campo/de host** (cabeceras y
+    `PHP-Version:`); tiene **prioridad** sobre las versiones de escaneo (las descartadas quedan en
+    `superseded`).
 - **Salida:** `cve_research/<target_id>_cves.json` — el mismo formato que ya consumen
   `scripts/organize_project.py` (Fase 4 — consolidación) y `scripts/qa_check.py`
   (Fase 5 — chequeo determinista CK-04, validación de CVEs):
@@ -76,6 +80,20 @@ Sirve saberlo aunque no programes, porque explica el contenido del JSON:
 - Cada CVE lleva un **`rank_reason`** obligatorio que explica por qué entró al top.
 - Si Nuclei ya había encontrado ese CVE, se marca `already_found_by_nuclei: true` (evita repetirlo
   en el informe).
+- **Filtro de versión parcheada (nuevo):** `vulnx` busca por **texto**, así que consultar `php 8.2.31`
+  devuelve justamente los CVE *arreglados* en 8.2.31. El script descarta un CVE cuando su fix
+  declarado (`remediation`/`description`: "Update to PHP 8.2.31 … or later", "before 9.6", "< 8.2.33")
+  es **igual o menor** a la versión detectada en la **misma rama** (ej. detecta 8.2.31 y el fix es
+  8.2.31 → no aplica). Es conservador: ignora versiones con letra (`1.0.2k`) y textos de otro producto
+  (ej. "Spark 2.4.6" sobre Apache 2.4.6). Los descartes quedan trazados en
+  `filtered_patched_cves[]`. Desactivable con `--no-patched-filter`.
+- **`vulnx` sin resultados:** si `vulnx search` termina con exit code 0 y **sin stdout**, significa
+  "0 resultados" (se registra `no_data_available`), no un fallo de consulta.
+- **Versión de campo vs. versión de escaneo:** la verificación de campo (`php2shell_*`) manda. Si Nikto
+  dice `PHP/8.2.31` y el campo dice `8.2.33`, el script analiza **8.2.33** y deja `superseded: ["8.2.31"]`.
+- **App PHP sin versión visible (Drupal/IIS):** si el advisory admite `implied_by` (ej. Drupal ⇒ PHP) y no
+  hay versión de PHP, la entrada se marca `needs_fingerprint: true` con `watchlist.status: unknown_version`
+  (no se inyectan CVEs, pero el plan de explotación se entera del producto y pide el fingerprint).
 
 ## ⚠️ Notas
 

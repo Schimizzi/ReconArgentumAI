@@ -73,7 +73,7 @@ El pipeline se compone de fases que DEBES ejecutar en este orden EXACTO, UNA por
 Preséntale al usuario humano esta información:
 - **Target(s) autorizados:** Los que aparecen en `scope.json` → `authorized_targets`
 - **Modo de ejecución:** Host (macOS nativo)
-- **Pipeline completo:** 10 steps / 9 herramientas (Nmap, HTTPX, Nuclei, Nikto, WhatWeb, Gobuster, SSLyze, IIS Shortname, SMB Enum)
+- **Pipeline completo:** 12 steps / 11 herramientas (Nmap, HTTPX, Nuclei, Nikto, WhatWeb, Gobuster, SSLyze, IIS Shortname, SMB Enum, LDAP Enum, Enum4linux)
 
 Pregunta al usuario, UNO POR UNO, por cada herramienta:
 1. ¿Usar esta herramienta? (SÍ/NO)
@@ -104,7 +104,7 @@ cd /Users/claudio/Recon_Workspace/ReconArgentumAI && bash scripts/host/preflight
 
 ## FASE 1: RECONOCIMIENTO AUTOMATIZADO
 
-El ReconBot es el especialista en ejecutar el DAG de 10 pasos de escaneo. Su perfil está en `~/.hermes/profiles/recon`.
+El ReconBot es el especialista en ejecutar el DAG de 12 pasos de escaneo. Su perfil está en `~/.hermes/profiles/recon`.
 
 > 🛡️ Al delegar esta fase, exigí explícitamente el cumplimiento de **R1** (solo targets de `scope.json`), **R3** (orden 1→10, sin paralelismo, con delays de `stealth.yaml`) y **R4** (evidencia íntegra e inmutable en `evidence/<target>/` + `manifest.json`).
 

@@ -28,6 +28,7 @@ Requiere:
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import os
 import re
@@ -53,6 +54,27 @@ CVSS_MIN = 4.0
 # Desactivable con --no-relevance-filter.
 RELEVANCE_FILTER = True
 
+# Filtro de versión parcheada activado por defecto (ver _is_covered_by_declared_fix).
+# Desactivable con --no-patched-filter.
+PATCHED_FILTER = True
+
+# Patrones de "versión de fix" declarada por el CVE.
+# Ejemplos reales de la evidencia: "Upgrade to PHP 8.2.33, 8.3.33, 8.4.24, 8.5.9 or later",
+# "Update to PHP 5.4.16 RC1 or later", "Update to Apache HTTP Server 2.4.39 or later",
+# "PHP 8.2.* < 8.2.33", "OpenSSH before 9.6".
+FIX_LIST_PATTERN = re.compile(
+    r'(?:upgrade|update|patched|fixed|resolved|mitigated)\b[^.\n]{0,45}?'
+    r'((?:\d+\.\d+(?:\.\d+)?(?![\dA-Za-z])(?!\.\d)(?:\s*,\s*)?)+)', re.I)
+FIX_OR_LATER_PATTERN = re.compile(
+    r'(\d+\.\d+(?:\.\d+)?(?![\dA-Za-z])(?!\.\d))[^\d\n]{0,14}?\bor\s+(?:later|newer|higher|above)', re.I)
+FIX_BEFORE_PATTERN = re.compile(
+    r'(?:before|prior to)\s+(\d+\.\d+(?:\.\d+)?(?![\dA-Za-z])(?!\.\d))', re.I)
+FIX_LT_PATTERN = re.compile(r'<\s*(\d+\.\d+(?:\.\d+)?(?![\dA-Za-z])(?!\.\d))', re.I)
+
+# Frases donde el número es la versión AFECTADA (nunca un fix):
+_AFFECTED_AFTER = re.compile(r'(\d+\.\d+(?:\.\d+)?)\s*(?:and|or)\s+(?:earlier|before|prior)', re.I)
+_AFFECTED_PREFIX = re.compile(r'(?:affected|vulnerable|affects|impacted|impacta)\b[^.\n]{0,25}$', re.I)
+
 IMPACTO_CRITICO_KEYWORDS = {
     "remote_code_execution", "privilege_escalation",
     "broken_authentication", "broken_access_control",
@@ -63,6 +85,17 @@ IMPACTO_CRITICO_KEYWORDS = {
 
 SEVERITY_MAP = [(9.0, "CRITICAL"), (7.0, "HIGH"), (4.0, "MEDIUM"), (0.0, "LOW")]
 
+# ---------------------------------------------------------------------------
+# Advisory watchlist local (config/advisories/*.json)
+# ---------------------------------------------------------------------------
+# CVEs críticos recién publicados que `vulnx` puede no tener todavía (o cuyas
+# consultas fallan por rate limit). Se inyectan en el output con comparación
+# determinista de versiones, sin depender de la API. Ejemplo vigente: PHP2Shell
+# (CVE-2026-109618 / CVE-2026-109619, PHP < 8.2.35/8.3.36/8.4.27/8.5.12).
+ADVISORIES_DEFAULT = os.path.normpath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "config", "advisories"))
+WATCHLIST_RANK_REASON = "advisory_watchlist_critica"
+
 # Plugins de WhatWeb que NO son tecnologías (metadata/pseudo-plugins del fingerprint).
 # Buscarlos en vulnx genera FALSOS POSITIVOS (ej. "Country" → CVEs de un plugin de
 # WooCommerce, "IP"/"Title"/"Script" → ruido). Se excluyen del CVE research.
@@ -70,6 +103,10 @@ WHATWEB_NON_TECH_PLUGINS = {
     "ip", "country", "title", "htmltitle", "script", "html5", "redirectlocation",
     "uncommonheaders", "httpserver", "cookies", "headers", "email", "frame",
     "object", "passwordfield", "comment",
+    # Headers genéricos de fingerprint: NO son una tecnología consultable. Si aportan
+    # PHP, el loader de evidencia ya lo mapea a la tecnología "PHP"
+    # (evita además que un `PoweredBy: Red Hat` matchee la watchlist de PHP).
+    "poweredby", "x-powered-by", "x-aspnet-version",
 }
 
 # ---------------------------------------------------------------------------
@@ -231,9 +268,21 @@ def _run_vulnx(args: list[str], timeout: int = VULNX_TIMEOUT,
             last_err = str(e)
         else:
             if proc.returncode == 0:
+                out = (proc.stdout or "").strip()
+                # rc=0 SIN stdout = la consulta respondió y no hay resultados
+                # (comportamiento normal de vulnx): NO es un fallo de consulta.
+                if not out:
+                    return []
                 try:
-                    return json.loads(proc.stdout)
+                    return json.loads(out)
                 except json.JSONDecodeError:
+                    # vulnx puede imprimir avisos junto al JSON: rescatar el objeto.
+                    start, end = out.find("{"), out.rfind("}")
+                    if start != -1 and end > start:
+                        try:
+                            return json.loads(out[start:end + 1])
+                        except json.JSONDecodeError:
+                            pass
                     last_err = "stdout no es JSON"
             else:
                 err_lines = [ln for ln in (proc.stderr or "").splitlines() if ln.strip()]
@@ -246,13 +295,19 @@ def _run_vulnx(args: list[str], timeout: int = VULNX_TIMEOUT,
 
 
 def _search_vulns(product: str, version: str | None = None) -> list[dict] | None:
-    """Devuelve la lista de resultados, o None si la consulta FALLÓ (≠ lista vacía)."""
+    """Devuelve la lista de resultados, o None si la consulta FALLÓ (≠ lista vacía).
+
+    `vulnx search` con rc=0 y sin stdout significa "0 resultados" → `_run_vulnx`
+    devuelve `[]` (lista) y acá se propaga como lista vacía, NO como fallo.
+    """
     query = product
     if version and version not in ("unknown", "", "none"):
         query = f"{product} {version}"
     data = _run_vulnx(["search", query, "--json", "--limit", str(SEARCH_LIMIT)])
     if data is None:
         return None
+    if isinstance(data, list):
+        return data
     return data.get("results") or []
 
 
@@ -267,6 +322,346 @@ def _get_cve_details(cve_ids: list[str]) -> dict[str, dict]:
     return {}
 
 
+# ---------------------------------------------------------------------------
+# Advisory watchlist — carga, match y comparación de versiones
+# ---------------------------------------------------------------------------
+
+
+def _parse_version_tuple(text):
+    """(major, minor, patch) de un string de versión; None si no hay versión."""
+    if not text:
+        return None
+    m = re.search(r"(\d+)\.(\d+)(?:\.(\d+))?", str(text))
+    if not m:
+        return None
+    return tuple(int(g) if g is not None else 0 for g in m.groups())
+
+
+def _declared_fix_versions(detail: dict) -> set:
+    """Versiones que el CVE declara como fix (remediation + description).
+
+    Conservador: sólo toma números que aparecen en contextos de fix
+    ("upgrade/update/patched to ...", "X or later", "before X", "< X") y descarta
+    los que el propio texto marca como versión afectada ("X and earlier",
+    "affected versions X").
+    """
+    rem = str(detail.get("remediation") or "")
+    desc = str(detail.get("description") or "")
+    fixes = set()
+
+    def _add(text):
+        v = _parse_version_tuple(text)
+        if v:
+            fixes.add(v)
+
+    for m in FIX_LIST_PATTERN.finditer(rem):
+        prefix = rem[max(0, m.start(1) - 30):m.start(1)]
+        if _AFFECTED_PREFIX.search(prefix):
+            continue
+        for tok in re.findall(r'\d+\.\d+(?:\.\d+)?', m.group(1)):
+            _add(tok)
+    for m in FIX_OR_LATER_PATTERN.finditer(rem):
+        _add(m.group(1))
+    for text in (rem, desc):
+        for m in FIX_BEFORE_PATTERN.finditer(text):
+            _add(m.group(1))
+        for m in FIX_LT_PATTERN.finditer(text):
+            _add(m.group(1))
+        for m in _AFFECTED_AFTER.finditer(text):
+            fixes.discard(_parse_version_tuple(m.group(1)))
+    return fixes
+
+
+def _is_covered_by_declared_fix(version: str, detail: dict,
+                                query_tokens: set | None = None) -> bool:
+    """True si la versión detectada YA incluye el fix declarado por el CVE.
+
+    Anti falso positivo del propio `vulnx` (el buscador es de texto: consultar
+    "php 8.2.31" devuelve los CVE *arreglados* en 8.2.31). Sólo se compara dentro
+    de la MISMA rama major.minor y, si se pasan `query_tokens`, sólo se acepta si
+    el texto del CVE menciona el mismo producto (evita cruces como "Spark 2.4.6"
+    sobre un "Apache 2.4.6").
+    """
+    v = _parse_version_tuple(version)
+    if v is None:
+        return False
+    if query_tokens:
+        blob = " ".join(str(detail.get(k) or "") for k in ("remediation", "description"))
+        text_tokens = _tokenize(blob)
+        if not any(_token_match(qt, tt) for qt in query_tokens for tt in text_tokens):
+            return False
+    for fix in _declared_fix_versions(detail):
+        if fix[0] == v[0] and fix[1] == v[1] and v >= fix:
+            return True
+    return False
+
+
+def _load_advisories(path: str | None) -> list[dict]:
+    """Carga los advisories locales activos desde un dir o un archivo JSON."""
+    src = path or ADVISORIES_DEFAULT
+    files = []
+    if os.path.isdir(src):
+        files = [os.path.join(src, n) for n in sorted(os.listdir(src))
+                 if n.endswith(".json")]
+    elif os.path.isfile(src):
+        files = [src]
+    advisories = []
+    for fp in files:
+        try:
+            with open(fp, "r", encoding="utf-8") as f:
+                adv = json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"  \u26a0\ufe0f  advisory ilegible {fp}: {e}", file=sys.stderr)
+            continue
+        if adv.get("active", True):
+            advisories.append(adv)
+    return advisories
+
+
+def _advisory_status(adv: dict, version: str) -> tuple[str, str | None]:
+    """(status, patched) para la versión detectada.
+
+    status: affected | patched | eol_sin_parche | not_affected | unknown_version
+    """
+    v = _parse_version_tuple(version)
+    if v is None:
+        return "unknown_version", None
+    key = f"{v[0]}.{v[1]}"
+    branches = adv.get("branches") or {}
+    if key in branches:
+        patched = (branches[key] or {}).get("patched")
+        pv = _parse_version_tuple(patched)
+        if pv and v < pv:
+            return "affected", patched
+        if pv:
+            return "patched", patched
+    eol_max = _parse_version_tuple(adv.get("eol_max_exclusive"))
+    if eol_max and v < eol_max:
+        return "eol_sin_parche", None
+    return "not_affected", None
+
+
+def _advisory_matches(adv: dict, name: str, version: str = "") -> bool:
+    """True si el advisory aplica al producto detectado (tokens + alias)."""
+    aliases = adv.get("product_aliases") or [adv.get("product") or ""]
+    q = _expand_aliases(_tokenize(name)) | _expand_aliases(_tokenize(version))
+    for alias in aliases:
+        if not alias:
+            continue
+        for ct in _expand_aliases(_tokenize(alias)):
+            for qt in q:
+                if _token_match(ct, qt):
+                    return True
+    return False
+
+
+def _advisory_implied(adv: dict, name: str) -> bool:
+    """True si la tecnología IMPLICA el producto del advisory (ej. Drupal ⇒ PHP).
+
+    Se usa para marcar `needs_fingerprint` en apps PHP cuya versión de PHP no se ve
+    (Drupal/IIS): el advisory aplica al PHP que corre por debajo.
+    """
+    for implied in adv.get("implied_by") or []:
+        if not implied:
+            continue
+        for ct in _expand_aliases(_tokenize(implied)):
+            for qt in _expand_aliases(_tokenize(name)):
+                if _token_match(ct, qt):
+                    return True
+    return False
+
+
+def _build_advisory_entry(adv: dict, cve: dict, version: str, status: str,
+                          patched: str | None, already_found: bool) -> dict:
+    refs = cve.get("references") or []
+    nvd_url = next((u for u in refs if "nvd.nist.gov" in u),
+                   f"https://nvd.nist.gov/vuln/detail/{cve.get('id')}")
+    vendor = next((u for u in refs if "nvd.nist.gov" not in u), "")
+    return {
+        "id": cve.get("id"),
+        "cvss_score": cve.get("cvss_score"),
+        "severity": cve.get("severity") or _severity_label(cve.get("cvss_score")),
+        "description": (cve.get("mechanism") or "")[:500],
+        "affected_versions": f"{adv.get('product', 'php')} {version} (estado: {status})"[:300],
+        "patched_version": (patched or
+                            "sin release upstream (EOL): backport de vendor o de fuente")[:300],
+        "exploit_available": bool(cve.get("exploit_available")),
+        "exploit_db_id": None,
+        "github_poc": [u for u in refs if "github.com" in u],
+        "nvd_url": nvd_url,
+        "vendor_advisory": vendor,
+        "already_found_by_nuclei": already_found,
+        "source": "advisory_watchlist",
+        "advisory_id": adv.get("advisory_id"),
+        "in_the_wild": bool(cve.get("in_the_wild")),
+        "rank_reason": WATCHLIST_RANK_REASON,
+    }
+
+
+def _apply_advisories(advisories: list[dict], services_analyzed: list[dict],
+                      web_analyzed: list[dict], nuclei_cves: set[str]) -> list[dict]:
+    """Inyecta los CVEs del advisory en los servicios/tecnologías que matchean.
+
+    Guarda anti falso positivo: si la versión detectada ES la parcheada, NO se
+    listan CVEs (sólo se deja constancia en `watchlist.status = patched`).
+    """
+    matches = []
+    for group, is_web in ((services_analyzed, False), (web_analyzed, True)):
+        for entry in group:
+            name = entry.get("technology") if is_web else entry.get("service")
+            version = entry.get("version") or ""
+            for adv in advisories:
+                implied = False
+                if not _advisory_matches(adv, name or "", version):
+                    # App PHP sin versión visible (Drupal/IIS): el advisory aplica al PHP
+                    # que corre por debajo → se marca para fingerprint, sin listar CVEs.
+                    if not version and _advisory_implied(adv, name or ""):
+                        implied = True
+                    else:
+                        continue
+                status, patched = (("unknown_version", None) if implied
+                                   else _advisory_status(adv, version))
+                info = {"entry": name, "kind": "web" if is_web else "service",
+                        "version": version, "advisory_id": adv.get("advisory_id"),
+                        "status": status, "patched_version": patched, "cves": []}
+                if implied:
+                    entry["needs_fingerprint"] = True
+                    info["detail"] = ("tecnología PHP implícita por la app (%s) y versión de PHP "
+                                      "no detectada" % (name or "?"))
+                elif status in ("affected", "eol_sin_parche"):
+                    existing = {c.get("id") for c in entry.get("cves", [])}
+                    for cve in adv.get("cves", []):
+                        if cve.get("id") in existing:
+                            continue
+                        entry.setdefault("cves", []).append(_build_advisory_entry(
+                            adv, cve, version, status, patched,
+                            (cve.get("id") or "").upper() in nuclei_cves))
+                        info["cves"].append(cve.get("id"))
+                elif status == "unknown_version":
+                    entry["needs_fingerprint"] = True
+                    info["detail"] = "producto del advisory sin versión detectada"
+                entry["watchlist"] = {"advisory_id": adv.get("advisory_id"),
+                                      "status": status, "patched_version": patched}
+                matches.append(info)
+    return matches
+
+
+# ---------------------------------------------------------------------------
+# Versiones web adicionales desde la evidencia cruda (Nikto/HTTPX/Gobuster/Nmap)
+# ---------------------------------------------------------------------------
+# WhatWeb no siempre reporta PHP; Nikto (000287/600625), HTTPX (`tech`), el
+# `extrainfo` de Nmap y los headers guardados por los checks de Gobuster sí.
+# Sin esto, un PHP detectado únicamente por Nikto queda invisible para el Agente 4.
+
+_EVID_PHP_PATTERNS = [
+    (re.compile(r'"msg"\s*:\s*"Retrieved x-powered-by header:\s*PHP[/ ]?v?(\d+\.\d+(?:\.\d+)?)', re.I),
+     "nikto-x-powered-by"),
+    (re.compile(r'"msg"\s*:\s*"PHP/(\d+\.\d+(?:\.\d+)?)\s+appears to be outdated', re.I),
+     "nikto-banner-outdated"),
+    (re.compile(r'"tech"\s*:\s*\[[^\]]*"PHP:(\d+\.\d+(?:\.\d+)?)"', re.I), "httpx-tech"),
+    (re.compile(r'"PHP"\s*:\s*\{\s*"version"\s*:\s*\[\s*"(\d+\.\d+(?:\.\d+)?)"', re.I),
+     "whatweb-php"),
+    (re.compile(r'"extrainfo"\s*:\s*"[^"]*PHP/(\d+\.\d+(?:\.\d+)?)', re.I), "nmap-extrainfo"),
+    (re.compile(r'http-server-header:[^\n]*PHP/(\d+\.\d+(?:\.\d+)?)', re.I),
+     "nmap-http-server-header"),
+    (re.compile(r'x-powered-by\s*:\s*PHP[/ ]?v?(\d+\.\d+(?:\.\d+)?)', re.I),
+     "header-x-powered-by"),
+    (re.compile(r'server\s*:[^\n]*PHP/(\d+\.\d+(?:\.\d+)?)', re.I), "header-server-php"),
+    # Línea canónica de la verificación LOCAL en el host (`PHP-Version: 7.4.33`)
+    (re.compile(r'^php-version:\s*v?(\d+\.\d+(?:\.\d+)?)', re.I), "host-check-php-version"),
+]
+
+_EVID_GENERIC_TECH_PATTERNS = [
+    (re.compile(r'"tech"\s*:\s*\[[^\]]*"([A-Za-z][\w\.\-]{1,25}):(\d+\.\d+(?:\.\d+)?)"', re.I),
+     "httpx-tech"),
+    (re.compile(r'x-powered-by\s*:\s*([A-Za-z][\w\.\-]{1,25})/(\d+\.\d+(?:\.\d+)?)', re.I),
+     "header-x-powered-by"),
+]
+
+_EVID_FILES = ["nikto_*.json", "httpx.json", "nmap_detailed.txt", "nmap_detailed.json",
+               "gobuster_commands_outputs.txt", "gobuster_evidence.txt",
+               # Verificación de campo/de host (php2shell_check.sh / PS1 de Windows):
+               # son la fuente MÁS autoritativa de versión. Sin esto, Agente 4 usaba la
+               # versión vieja de Nikto (ej. 8.2.31) aunque el campo confirmara 8.2.33.
+               "php2shell_passive.txt", "php2shell_fingerprint.txt", "php2shell_detect.txt",
+               "php2shell_hostcheck*.txt"]
+
+# Archivos de la verificación de campo (tienen prioridad sobre el resto)
+_EVID_FIELD_PREFIX = "php2shell_"
+
+
+def _load_evidence_web_versions(evidence_dir: str | None,
+                                extra_dirs: list[str] | None = None) -> list[dict]:
+    """Tecnologías+versión detectadas en la evidencia cruda.
+
+    Devuelve [{"technology","version","source"}] deduplicado por (tech, versión).
+    """
+    dirs = [d for d in ([evidence_dir] + list(extra_dirs or []))
+            if d and os.path.isdir(d)]
+    if not dirs:
+        return []
+    found = []
+    for d in dirs:
+        for pat in _EVID_FILES:
+            for fp in sorted(glob.glob(os.path.join(d, pat))):
+                try:
+                    with open(fp, "r", errors="ignore") as fh:
+                        for i, line in enumerate(fh, 1):
+                            hit = False
+                            for rx, _kind in _EVID_PHP_PATTERNS:
+                                m = rx.search(line)
+                                if m:
+                                    found.append({"technology": "PHP",
+                                                  "version": m.group(1),
+                                                  "source": f"{os.path.basename(fp)}#{i}"})
+                                    hit = True
+                                    break
+                            if hit:
+                                continue
+                            for rx, _kind in _EVID_GENERIC_TECH_PATTERNS:
+                                m = rx.search(line)
+                                if m:
+                                    found.append({"technology": m.group(1),
+                                                  "version": m.group(2),
+                                                  "source": f"{os.path.basename(fp)}#{i}"})
+                                    break
+                except (IOError, OSError):
+                    continue
+    seen, out, idx = set(), [], {}
+    for f in found:
+        key = (f["technology"].lower(), f["version"])
+        if key in seen:
+            # Misma tecnología+versión vista desde otra fuente: se prefiere la de la
+            # verificación de campo (mejor procedencia).
+            pos = idx[key]
+            if str(f.get("source", "")).startswith(_EVID_FIELD_PREFIX) and \
+                    not str(out[pos].get("source", "")).startswith(_EVID_FIELD_PREFIX):
+                out[pos] = f
+            continue
+        seen.add(key)
+        idx[key] = len(out)
+        out.append(f)
+
+    # Prioridad: si una tecnología tiene versión proveniente de la verificación de campo
+    # (`php2shell_*`), se descartan las versiones viejas de la misma tecnología y se deja
+    # constancia en `superseded` (trazabilidad de la discrepancia).
+    field_techs = {f["technology"].lower() for f in out
+                   if str(f.get("source", "")).startswith(_EVID_FIELD_PREFIX)}
+    if field_techs:
+        superseded = {}
+        final = []
+        for f in out:
+            tech = f["technology"].lower()
+            if tech in field_techs and not str(f.get("source", "")).startswith(_EVID_FIELD_PREFIX):
+                superseded.setdefault(tech, []).append(f["version"])
+                continue
+            final.append(f)
+        for f in final:
+            sup = superseded.get(f["technology"].lower())
+            if sup:
+                f["superseded"] = sorted(set(sup))
+        out = final
+    return out
 # ---------------------------------------------------------------------------
 # Ranking
 # ---------------------------------------------------------------------------
@@ -478,6 +873,7 @@ def _investigate_service(name: str, version: str, port: int,
 
     entries = []
     filtered_out = 0
+    dropped_patched = []
     for r in valid:
         cve_id = r.get("cve_id", "")
         detail = details.get(cve_id, r)
@@ -485,11 +881,17 @@ def _investigate_service(name: str, version: str, port: int,
         if RELEVANCE_FILTER and not _cve_is_relevant(detail if detail.get("affected_products") else r, query_tokens):
             filtered_out += 1
             continue
+        # Anti falso positivo del propio vulnx: el CVE declara un fix que el host YA tiene.
+        if PATCHED_FILTER and _is_covered_by_declared_fix(version, detail, query_tokens):
+            dropped_patched.append(cve_id)
+            continue
         already = cve_id.upper() in nuclei_cves
         entries.append(_build_cve_entry(detail, already))
 
     if filtered_out:
         print(f"[{filtered_out} descartados por relevancia] ", end="")
+    if dropped_patched:
+        print(f"[{len(dropped_patched)} descartados por versión parcheada] ", end="")
 
     ranked = _rank_cves(entries)
     for i, cve in enumerate(ranked):
@@ -497,8 +899,12 @@ def _investigate_service(name: str, version: str, port: int,
     top_cves = ranked[:TOP_N_MAX]
 
     if is_web:
-        return {"technology": name, "version": version or None, "cves": top_cves}, False
-    return {"service": name, "version": version or None, "port": port, "cves": top_cves}, False
+        out = {"technology": name, "version": version or None, "cves": top_cves}
+    else:
+        out = {"service": name, "version": version or None, "port": port, "cves": top_cves}
+    if dropped_patched:
+        out["filtered_patched_cves"] = dropped_patched
+    return out, False
 
 
 def _collect_omissions(services_analyzed: list[dict],
@@ -561,10 +967,25 @@ def process_target(target_id: str, target_ip: str,
                    nmap_path: str, whatweb_path: str | None,
                    nuclei_path: str | None,
                    output_path: str | None = None,
-                   dry_run: bool = False) -> dict:
+                   dry_run: bool = False,
+                   advisories_path: str | None = None,
+                   evidence_dir: str | None = None,
+                   extra_evidence_dirs: list[str] | None = None) -> dict:
     services = _load_nmap_services(nmap_path)
     web_technologies = _load_whatweb(whatweb_path)
     nuclei_cves = _load_nuclei_cves(nuclei_path)
+    advisories = _load_advisories(advisories_path) if advisories_path is not False else []
+
+    # D1: versiones web que WhatWeb no reporta (Nikto, HTTPX, headers de Gobuster, Nmap).
+    for ev in _load_evidence_web_versions(evidence_dir, extra_evidence_dirs):
+        if not any(w["technology"].lower() == ev["technology"].lower()
+                   and (w.get("version") or "") == ev["version"]
+                   for w in web_technologies):
+            web_technologies.append(ev)
+
+    if advisories:
+        print("  \U0001f6e1\ufe0f  Advisories activos: "
+              + ", ".join(a.get("advisory_id", "?") for a in advisories))
 
     services_analyzed = []
     failed_services = []
@@ -603,20 +1024,32 @@ def process_target(target_id: str, target_ip: str,
     for wt in web_technologies:
         has_version = wt.get("version", "") or ""
         if has_version.lower() in ("", "unknown", "none"):
-            print(f"  \U0001f310 web/{wt['technology']}... [omitido: sin version detectada]", flush=True)
+            adv_hit = [a.get("advisory_id") for a in advisories
+                       if _advisory_matches(a, wt["technology"], "")
+                       or _advisory_implied(a, wt["technology"])]
+            nota = (f" \u26a0\ufe0f  advisory {adv_hit[0]} aplica al producto → "
+                    f"requiere fingerprint de versión" if adv_hit else "")
+            print(f"  \U0001f310 web/{wt['technology']}... [omitido: sin version detectada]{nota}",
+                  flush=True)
             wt_stub = {
                 "technology": wt["technology"], "version": wt.get("version", ""),
                 "cves": [], "ranked": False,
                 "error": "sin_version",
+                "needs_fingerprint": bool(adv_hit),
             }
+            if wt.get("source"):
+                wt_stub["source"] = wt["source"]
             if not wt.get("version", ""):
-                omitted_web.append(f"web/{wt['technology']} (sin version)")
+                omitted_web.append(f"web/{wt['technology']} (sin version)"
+                                   + (f" | advisory {adv_hit[0]}" if adv_hit else ""))
             web_analyzed.append(wt_stub)
             continue
         print(f"  \U0001f310 web/{wt['technology']} (v{wt['version']})...",
               end=" ", flush=True)
         r, failed = _investigate_service(wt["technology"], wt["version"], 0,
                                           nuclei_cves, is_web=True)
+        if wt.get("source"):
+            r["source"] = wt["source"]
         web_analyzed.append(r)
         if failed:
             failed_web.append(f"web/{r.get('technology', wt['technology'])}")
@@ -628,6 +1061,14 @@ def process_target(target_id: str, target_ip: str,
         print(f"  \U0001f4a1 Sin version: {len(omitted_services)} servicio(s) + "
               f"{len(omitted_web)} web(s) omitidos (sin version exacta)",
               file=sys.stderr)
+
+    # D3: advisory watchlist local (CVEs recién publicados / no indexados en vulnx).
+    watchlist_matches = _apply_advisories(advisories, services_analyzed, web_analyzed,
+                                          nuclei_cves) if advisories else []
+    for m in watchlist_matches:
+        extra = f" (+{len(m['cves'])} CVEs)" if m["cves"] else ""
+        print(f"  \U0001f6e1\ufe0f  watchlist {m['advisory_id']}: {m['entry']} "
+              f"v{m['version'] or '?'} → {m['status']}{extra}")
 
     all_cves = []
     for s in services_analyzed:
@@ -644,6 +1085,7 @@ def process_target(target_id: str, target_ip: str,
         "research_timestamp": datetime.now(timezone.utc).isoformat(),
         "services_analyzed": services_analyzed,
         "web_technologies": web_analyzed,
+        "watchlist_matches": watchlist_matches,
         "source_omissions": _collect_omissions(services_analyzed, web_analyzed,
                                                 failed_services, failed_web,
                                                 omitted_services, omitted_web),
@@ -655,6 +1097,8 @@ def process_target(target_id: str, target_ip: str,
             "low": sev_count("LOW"),
             "with_public_exploit": sum(1 for c in all_cves if c.get("exploit_available")),
             "patched_available": sum(1 for c in all_cves if c.get("patched_version")),
+            "watchlist_cves": sum(1 for c in all_cves
+                                  if c.get("source") == "advisory_watchlist"),
         },
     }
 
@@ -713,16 +1157,35 @@ def main():
                         help="Solo imprime lo que haria, no escribe output")
     parser.add_argument("--no-relevance-filter", action="store_true",
                         help="Desactivar el filtro anti falso positivo (CVE por relevancia de producto)")
+    parser.add_argument("--no-patched-filter", action="store_true",
+                        help="Desactivar el filtro de versión parcheada (no descartar CVEs cuyo fix ya está aplicado)")
+    parser.add_argument("--advisories",
+                        help=f"Dir/archivo de advisories locales (default: {ADVISORIES_DEFAULT})")
+    parser.add_argument("--no-watchlist", action="store_true",
+                        help="Desactivar la advisory watchlist local (solo vulnx)")
+    parser.add_argument("--evidence-dir",
+                        help="Dir de evidencia cruda para versiones web adicionales "
+                             "(default: carpeta del --nmap)")
+    parser.add_argument("--cliente-dir",
+                        help="Dir CLIENTE/<ip>/outputs (headers de los checks de Gobuster)")
     args = parser.parse_args()
 
     # Flag global del filtro de relevancia
     globals()["RELEVANCE_FILTER"] = not args.no_relevance_filter
+    # Flag global del filtro de versión parcheada
+    globals()["PATCHED_FILTER"] = not args.no_patched_filter
+
+    evidencias = args.evidence_dir or (os.path.dirname(args.nmap) if args.nmap else None)
+    extra_evid = [args.cliente_dir] if args.cliente_dir else []
+    advisories_path = False if args.no_watchlist else (args.advisories or ADVISORIES_DEFAULT)
 
     print(f"\n\U0001f52c CVE Research \u2014 {args.target_ip} ({args.target_id})")
     print(f"   Motor: vulnx v2")
     print(f"   Nmap:  {args.nmap}")
     print(f"   WhatWeb: {args.whatweb or '(no disponible)'}")
     print(f"   Nuclei: {args.nuclei or '(no disponible)'}")
+    print(f"   Evidencia extra: {evidencias or '(no disponible)'}")
+    print(f"   Advisories: {advisories_path if advisories_path else '(desactivado)'}")
     print()
 
     result = process_target(
@@ -733,6 +1196,9 @@ def main():
         nuclei_path=args.nuclei,
         output_path=args.output,
         dry_run=args.dry_run,
+        advisories_path=advisories_path,
+        evidence_dir=evidencias,
+        extra_evidence_dirs=extra_evid,
     )
 
     if args.dry_run:

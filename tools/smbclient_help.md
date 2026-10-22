@@ -1,7 +1,8 @@
 # SMBCLIENT — Reference Help
-> VERIFICADO: **smbclient 4.24.6** instalado en el host macOS (`/opt/homebrew/bin/smbclient`,
-> fórmula brew `samba`). Soporta `-L`, `-N`, `-t`, `-c`, `--max-protocol`.
-> En Docker/Kali viene con el paquete `smbclient` (apt).
+> VERIFICADO: **smbclient 4.24.6** en el host macOS (`/opt/homebrew/bin/smbclient`, fórmula brew
+> `samba`) y en Kali/Debian (paquete `smbclient`). Soporta `-L`, `-N`, `-t`, `-c`, `--max-protocol`.
+> ⚠️ Si `command -v smbclient` no devuelve nada, instalar el stack Samba: `brew install samba` en
+> macOS o `sudo apt install smbclient` en Linux (dependencia del Step 10 y de enum4linux).
 
 ## QUÉ ES
 smbclient es el cliente SMB/CIFS de Samba. Se usa en este proyecto para **enumerar

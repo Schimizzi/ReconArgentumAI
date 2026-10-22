@@ -35,6 +35,11 @@
 # (solo IPs de ejemplo). Se versionan para poder restaurarlas al limpiar
 # el proyecto (scripts/cleanup_engagement.sh) o al clonar el repo.
 !/config/*.template
+# EXCEPCIÓN: la watchlist de advisories (config/advisories/*.json) es contenido de
+# INGENIERÍA, no dato del engagement: define CVEs críticos recientes (PHP2Shell) con
+# las versiones parcheadas y la consume el Agente 4 + CK-10 en todos los engagements.
+!/config/advisories/
+!/config/advisories/*.json
 
 # ---------------------------------------------------------------------------
 # 2) CONFIGURACIÓN LOCAL DEL AGENTE / IA

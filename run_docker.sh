@@ -33,12 +33,12 @@ else
   docker compose build || { echo "Build falló."; exit 1; }
 fi
 
-# 2) Sanity de tools dentro de la imagen (9 tools del Agente 1 + jq)
+# 2) Sanity de tools dentro de la imagen (10 tools del Agente 1 + jq)
 # En modo automático: si la imagen es vieja (falta smbclient/ping), se rebuilda UNA vez
 # y se reintenta el sanity antes de fallar.
 sanity_ok() {
   docker compose run --rm -T pentest bash -c \
-    'for t in nmap httpx-toolkit nuclei nikto whatweb gobuster sslyze smbclient ping jq; do
+    'for t in nmap httpx-toolkit nuclei nikto whatweb gobuster sslyze smbclient enum4linux-ng ldapsearch ping jq; do
        command -v $t >/dev/null 2>&1 && echo "  OK $t -> $(command -v $t)" || echo "  FALTA $t"; done
      # httpx de probe: en la imagen Docker se instala httpx-toolkit (paquete de Kali)
      if command -v httpx-toolkit >/dev/null 2>&1; then
@@ -48,7 +48,7 @@ sanity_ok() {
      fi'
 }
 echo ""
-echo "--- 🔍 Sanity check (9 tools + jq) ---"
+echo "--- 🔍 Sanity check (10 tools + jq) ---"
 if ! sanity_ok; then
   if [ "$MODE" = "--auto" ] || [ "$MODE" = "--auto-target" ]; then
     echo "⚠️  Imagen sin las tools del Agente 1 (o imagen vieja). Reconstruyendo UNA vez…"

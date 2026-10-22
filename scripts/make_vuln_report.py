@@ -545,6 +545,153 @@ def parse_gobuster(path, rel):
     return findings
 
 
+_E4L_USER_RE = re.compile(r"Account:\s*(\S+)|user:\[([^\]]+)\]", re.I)
+_E4L_GROUP_RE = re.compile(r"Group:\s*(\S+)|group:\[([^\]]+)\]", re.I)
+_E4L_SHARE_RE = re.compile(r"^\s*(\S+)\s+(Disk|IPC|Printer)\b")
+_E4L_POLICY_RE = re.compile(r"(Minimum password length|Maximum password age|Minimum password age|Password history length|Lockout Threshold|Lockout Duration|Reset Lockout Counter|Password Complexity)", re.I)
+_E4L_DOMAIN_RE = re.compile(r"(Domain Name:|Domain SID|dnsHostName:|defaultNamingContext:|namingContexts:|ldapServiceName:|Workgroup:|workgroup:)", re.I)
+_E4L_SESSION_RE = re.compile(r"(Anonymous login successful|session setup|Session Setup|NT_STATUS_)", re.I)
+
+
+def _e4l_lines(path):
+    try:
+        return open(path, encoding="utf-8", errors="ignore").read().splitlines()
+    except Exception:
+        return []
+
+
+def _e4l_consolidado(rel, titulo, tipo, items, tope=20):
+    """UN hallazgo consolidado por categoria, con las lineas literales de la fuente."""
+    if not items:
+        return None
+    piezas = ["L%d: %s" % (i, l) for i, l in items[:tope]]
+    if len(items) > tope:
+        piezas.append("... y %d mas" % (len(items) - tope))
+    return {"titulo": titulo, "severidad": None, "descripcion": _corta("; ".join(piezas), 1500), "fuente": rel, "ubicacion": "lineas %d-%d" % (items[0][0], items[-1][0]), "puerto": None, "cve": None, "tipo": tipo}
+
+
+_E4L_JSON_KEYS = ("users", "groups", "shares", "password_policy", "policy", "domain", "os_info", "os", "ldap", "session")
+_E4L_JSON_TIPO = {"users": "enum4linux_usuarios", "groups": "enum4linux_grupos", "shares": "enum4linux_shares", "policy": "enum4linux_policy", "password_policy": "enum4linux_policy"}
+
+
+def _e4l_json_findings(path, rel):
+    try:
+        obj = json.load(open(path, encoding="utf-8", errors="ignore"))
+    except Exception:
+        return []
+    findings = []
+
+    def walk(o, pth):
+        if isinstance(o, dict):
+            for k, v in o.items():
+                kp = ("%s.%s" % (pth, k)) if pth else str(k)
+                if str(k).lower() in _E4L_JSON_KEYS and v not in (None, "", [], {}):
+                    n = len(v) if isinstance(v, (list, dict)) else 1
+                    findings.append({"titulo": "enum4linux (export JSON): seccion %s (%d)" % (k, n), "severidad": None, "descripcion": _corta("%s = %s" % (kp, json.dumps(v, ensure_ascii=False)[:600]), 900), "fuente": rel, "ubicacion": kp, "puerto": None, "cve": None, "tipo": _E4L_JSON_TIPO.get(str(k).lower(), "enum4linux_json")})
+                walk(v, kp)
+        elif isinstance(o, list):
+            for i, v in enumerate(o):
+                walk(v, "%s[%d]" % (pth, i))
+
+    walk(obj, "")
+    return findings
+
+
+def parse_enum4linux(path, rel):
+    """outputs/enum4linux.txt (salida cruda enum4linux-ng/perl) y outputs/enum4linux.json (export -oA) -> hallazgos de exposicion AD con extraccion LITERAL de la fuente (cero invencion; la herramienta no declara severidad)."""
+    if not os.path.exists(path):
+        return []
+    if path.lower().endswith(".json"):
+        return _e4l_json_findings(path, rel)
+    lines = _e4l_lines(path)
+    if not lines:
+        return []
+    base = os.path.basename(path)
+    findings = []
+    sesion, usuarios, grupos, shares, policy, dominio = [], [], [], [], [], []
+    for i, raw in enumerate(lines, start=1):
+        linea = raw.strip()
+        if not linea or linea.startswith(("enum4linux", "Starting enum4linux", "=")):
+            continue
+        if _E4L_USER_RE.search(linea):
+            usuarios.append((i, linea)); continue
+        if _E4L_GROUP_RE.search(linea):
+            grupos.append((i, linea)); continue
+        if _E4L_SHARE_RE.match(linea):
+            shares.append((i, linea)); continue
+        if _E4L_POLICY_RE.search(linea):
+            policy.append((i, linea)); continue
+        if _E4L_DOMAIN_RE.search(linea):
+            dominio.append((i, linea)); continue
+        if _E4L_SESSION_RE.search(linea):
+            sesion.append((i, linea)); continue
+    for items, titulo, tipo in ((sesion, "Sesion SMB anonima/nula (enum4linux) en " + base, "enum4linux_sesion"), (usuarios, "Usuarios enumerados (enum4linux) en " + base, "enum4linux_usuarios"), (grupos, "Grupos enumerados (enum4linux) en " + base, "enum4linux_grupos"), (shares, "Recursos compartidos (enum4linux) en " + base, "enum4linux_shares"), (policy, "Politica de contrasenas (enum4linux) en " + base, "enum4linux_policy"), (dominio, "Informacion de dominio/LDAP (enum4linux) en " + base, "enum4linux_dominio")):
+        f = _e4l_consolidado(rel, titulo, tipo, items)
+        if f:
+            findings.append(f)
+    return findings
+
+
+_SESION_RECHAZO_RE = re.compile(
+    r"(NT_STATUS_[A-Z_]+|Unable to connect|Connection refused|session setup failed|"
+    r"Anonymous login ausente|sin login anonimo)", re.I)
+
+
+def parse_sesion_rechazada(path, rel):
+    """outputs/{smbclient,enum4linux}_sin_sesion.txt -> hallazgo informativo de
+    'sesion SMB anonima rechazada' con extraccion LITERAL de la nota del step.
+
+    D (2026-10-22): los Steps 10/12 descartan la evidencia cruda cuando la sesion
+    anonima falla (es ruido sin hallazgo). Antes, eso desaparecia del reporte; la
+    nota conserva el motivo y aca se convierte en un hallazgo de contexto.
+    """
+    if not os.path.exists(path):
+        return []
+    base = os.path.basename(path)
+    herr = "smbclient" if base.startswith("smbclient") else "enum4linux"
+    tipo = "smbclient_sesion_rechazada" if herr == "smbclient" else "enum4linux_sesion_rechazada"
+    items = [(i, raw.strip()) for i, raw in enumerate(_e4l_lines(path), start=1) if raw.strip()]
+    if not items:
+        return []
+    f = _e4l_consolidado(rel, "Sesion SMB anonima rechazada (%s) en %s" % (herr, base), tipo, items)
+    return [f] if f else []
+
+
+_LDIF_USER_RE = re.compile(r"^sAMAccountName:\s*(.+)$")
+_LDIF_SPN_RE = re.compile(r"^servicePrincipalName:\s*(.+)$")
+_LDIF_INFO_RE = re.compile(r"^(namingContexts|defaultNamingContext|rootDomainNamingContext|dnsHostName|ldapServiceName|domainControllerFunctionality|forestFunctionality|domainFunctionality|supportedSASLMechanisms):\s*(.+)$")
+_LDIF_POLICY_RE = re.compile(r"^(minPwdLength|pwdHistoryLength|pwdProperties|lockoutThreshold|maxPwdAge|minPwdAge|ms-DS-MachineAccountQuota):\s*(.+)$")
+
+
+def parse_ldapsearch(path, rel):
+    """outputs/ldapsearch*.txt (LDIF) -> hallazgos de exposicion AD con extraccion LITERAL de la fuente (cero invencion; ldapsearch no declara severidad)."""
+    if not os.path.exists(path):
+        return []
+    lines = _e4l_lines(path)
+    if not lines:
+        return []
+    base = os.path.basename(path)
+    findings = []
+    info, users, spns, policy = [], [], [], []
+    for i, raw in enumerate(lines, start=1):
+        linea = raw.strip()
+        if not linea or linea.startswith(("ldapsearch", "ldap_sasl_bind", "result:")):
+            continue
+        if _LDIF_USER_RE.match(linea):
+            users.append((i, linea)); continue
+        if _LDIF_SPN_RE.match(linea):
+            spns.append((i, linea)); continue
+        if _LDIF_INFO_RE.match(linea):
+            info.append((i, linea)); continue
+        if _LDIF_POLICY_RE.match(linea):
+            policy.append((i, linea)); continue
+    for items, titulo, tipo in ((info, "Informacion de dominio (LDAP) en " + base, "ldapsearch_info"), (users, "Usuarios enumerados por LDAP en " + base, "ldapsearch_usuarios"), (spns, "SPN (candidatos a Kerberoasting) en " + base, "ldapsearch_spn"), (policy, "Politica de contrasenas / cuota (LDAP) en " + base, "ldapsearch_policy")):
+        f = _e4l_consolidado(rel, titulo, tipo, items)
+        if f:
+            findings.append(f)
+    return findings
+
+
 def parse_httpx(path, rel):
     """outputs/httpx.json (JSONL) → no declara hallazgos por si mismo.
 
@@ -681,6 +828,14 @@ def _dup_key(find):
     tl = titulo.lower()
     if tl in ("smb signing not required", "smb2-security-mode"):
         return ("smb_signing",)
+    if find.get("tipo") in ("ldapsearch_usuarios", "enum4linux_usuarios"):
+        return ("ad_usuarios",)
+    if find.get("tipo") == "enum4linux_grupos":
+        return ("ad_grupos",)
+    if find.get("tipo") == "enum4linux_shares":
+        return ("ad_shares",)
+    if find.get("tipo") in ("enum4linux_policy", "ldapsearch_policy"):
+        return ("ad_policy",)
     if tl.startswith("options:"):
         metodos = ",".join(sorted(re.findall(
             r"\b(?:GET|POST|HEAD|PUT|DELETE|OPTIONS|TRACE|PATCH|CONNECT)\b",
@@ -743,6 +898,12 @@ def _elegir_parser(name):
         return parse_httpx, True
     if re.match(r"gobuster_.+\.txt$", name):
         return parse_gobuster, True
+    if re.match(r"(smbclient|enum4linux)_sin_sesion\.txt$", name):
+        return parse_sesion_rechazada, True
+    if re.match(r"enum4linux.*\.(json|txt|jsonl)$", name):
+        return parse_enum4linux, True
+    if re.match(r"ldapsearch.*\.txt$", name):
+        return parse_ldapsearch, True
     return parse_generico, False
 
 
@@ -768,7 +929,13 @@ def analizar_outputs(out_dir, rel_base="outputs"):
             return 5, name
         if re.match(r"gobuster_.+\.txt$", name):
             return 6, name
-        return 7, name
+        if re.match(r"(smbclient|enum4linux)_sin_sesion\.txt$", name):
+            return 7, name
+        if re.match(r"ldapsearch.*\.txt$", name):
+            return 7, name
+        if re.match(r"enum4linux.*\.(json|txt|jsonl)$", name):
+            return 8, name
+        return 9, name
     for name in sorted(os.listdir(out_dir), key=_prio):
         path = os.path.join(out_dir, name)
         if os.path.isdir(path) or name.startswith("."):

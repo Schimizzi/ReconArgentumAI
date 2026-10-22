@@ -34,5 +34,7 @@ export PATH="$HOME/.local/bin:$PATH"
   done
   printf 'sslyze: '; command -v sslyze 2>/dev/null || echo FALTA-PATH
   printf 'whatweb-local: '; ls "$WS/tools/WhatWeb/whatweb" 2>/dev/null || echo FALTA
+  printf 'ldapsearch: '; command -v ldapsearch 2>/dev/null || echo MISSING-LDAP-UTILS
+  printf 'enum4linux-ng: '; command -v enum4linux-ng 2>/dev/null || echo "N/A en macOS (Step 12 solo Linux: sudo apt install enum4linux-ng)"
 } > /tmp/tools_install2.log 2>&1
 echo INSTALL2_FINALIZADO >> /tmp/tools_install2.log

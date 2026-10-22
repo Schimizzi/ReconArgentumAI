@@ -12,7 +12,7 @@
 - **Fase 0 (Calibración Global):** El agente debe proponer y calibrar la configuración de TODAS las herramientas en un solo paso interactivo con el usuario (modificando `config/stealth.yaml` y `config/approved_commands.md`). NO ejecuta ningún escaneo todavía.
 - **Fase 1 (Ejecución Autónoma):** Una vez aprobada la Fase 0, el agente debe usar EXCLUSIVAMENTE los scripts orquestadores (`scripts/host/run_fase1_run3.sh` o `run_host.sh`) para ejecutar todo el pipeline de forma desatendida. Queda **estrictamente prohibido** ejecutar los `step_X.sh` de forma manual o interactiva.
 
-> 💡 El orquestador (`run_fase1_run3.sh` / `run_target.sh`) ya implementa la secuencia correcta (10 steps), los delays de stealth, el retry 1x y la generación del manifest. No hay necesidad de orquestar paso a paso desde el prompt.
+> 💡 El orquestador (`run_fase1_run3.sh` / `run_target.sh`) ya implementa la secuencia correcta (12 steps), los delays de stealth, el retry 1x y la generación del manifest. No hay necesidad de orquestar paso a paso desde el prompt.
 
 ## 1. Precondiciones de entrada
 
@@ -36,7 +36,7 @@
 
 - ⚠️ **Docker Desktop (macOS) NO accede la LAN local del host**: ni `-sS` (raw sockets emulados)
   ni `-sT` (NAT/gRPC) propagan bien el tráfico → para escanear `192.168.8.0/24` usar SIEMPRE **MODO HOST**.
-- Ambos modos comparten el mismo DAG (10 steps, 9 tools), `config/stealth.yaml`,
+- Ambos modos comparten el mismo DAG (12 steps, 11 tools), `config/stealth.yaml`,
   workaround `-oJ` (ver Step 1) y el sub-schema de evidencia (`evidence/<target>/…`, `manifest.json`).
 - **Wordlists portables** (2026-09-07): `step7_gobuster.sh` y `preflight_run.sh` resuelven las
   SecLists probando `/opt/SecLists/...` → `/usr/share/seclists/...` → `$HOME/Documents/SecLists/...` → `tools/seclists_common.txt`
@@ -44,7 +44,7 @@
 - **Scan type autodetectado** (2026-09-07): `step1_nmap_ports.sh` y `step3_nmap_detailed.sh` usan
   `-sS` cuando `EUID == 0` (root: VM Kali / contenedor) y `-sT` en caso contrario (host macOS sin root).
 
-## 1. DAG lineal — 10 steps, 9 herramientas
+## 1. DAG lineal — 12 steps, 11 herramientas
 
 | Step | Herramienta | Input | Output en `evidence/<target>/` | Post-proceso |
 |---|---|---|---|---|
@@ -58,6 +58,8 @@
 | 8 | SSLyze | puertos TLS detectados del Step 3 (incluye STARTTLS: RDP, SMTP, IMAP, POP3, FTP, LDAP, PostgreSQL) | `sslyze_<port>.json` por puerto TLS | — |
 | 9 | IIS Shortname (8.3) | **solo si** hay web + `Microsoft-IIS`/`IIS` en httpx.json | `iis_shortname_evidence.txt/.json`, `iis_scan_urls.txt` | — |
 | 10 | SMB Enum | **solo si** TCP 139/445 abiertos | `smbclient_shares.txt`, `smbclient_<share>.txt` | — |
+| 11 | LDAP Enum (ldapsearch) | **solo si** TCP 389/636/3268/3269 abierto (Linux y macOS) | `ldapsearch.txt`, `ldapsearch_domain.txt` (+ `ldapsearch_users/spn.txt` con credenciales) | — |
+| 12 | Enum4linux | **solo si** TCP 139/445 abiertos **y solo en Linux** (macOS -> `skipped_unsupported_os`) | `enum4linux.txt`, `enum4linux.json`, `enum4linux.yaml` | — |
 
 ### Workarounds y edge cases
 
@@ -317,6 +319,39 @@ bash scripts/host/step10_smbclient_enum.sh --ev-dir <WORKSPACE>/evidence/<target
   login anónimo o shares accesibles; si no, se elimina — ruido sin hallazgo).
 - Si no hay 139/445 → `skipped_no_smb` y no se genera tráfico hacia el target.
 
+### Step 11 - LDAP Enum `step11_ldap_enum.sh` (input: puertos 389/636/3268/3269)
+
+> **Service-Based Router:** corre solo si TCP 389, 636, 3268 o 3269 esta abierto. **Corre en Linux Y
+macOS**. Modo anonimo por defecto (root DSE + objeto raiz del dominio); el modo credencializado
+(`--ldap-user/--ldap-pass`, usuarios + SPN) es **opt-in** y requiere aprobacion en Fase 0. El password
+nunca queda en la evidencia (archivo temporal 0600 + `<REDACTED>`).
+
+```bash
+bash scripts/host/step11_ldap_enum.sh --ev-dir <WORKSPACE>/evidence/<target> --force --no-ping-check
+```
+
+- Evidencia: `ldapsearch.txt` (root DSE) + `ldapsearch_domain.txt`; con credenciales, `ldapsearch_users.txt`
+  y `ldapsearch_spn.txt`. Primera linea = comando ejecutado. Se conservan solo si trajeron datos.
+- Sin 389/636/3268/3269 -> `skipped_no_ldap`, sin trafico.
+
+### Step 12 - Enum4linux `step12_enum4linux_enum.sh` (input: puertos 139/445 + SO Linux)
+
+> **Service-Based Router + guard de plataforma:** el Step 11 corre **solo en Linux** y solo si TCP 139
+o 445 esta abierto. En **macOS** (`uname -s` = Darwin) NO se ejecuta y el manifest lo registra como
+`skipped_unsupported_os`, sin generar trafico. Si no existe `enum4linux-ng` ni `enum4linux` en el
+PATH, queda `skipped`.
+
+```bash
+bash scripts/host/step12_enum4linux_enum.sh --ev-dir <WORKSPACE>/evidence/<target> --force --no-ping-check
+```
+
+- `--force` / `--no-ping-check`: misma semántica que el Step 10.
+- Evidencia del Step 11 en `evidence/<target>/`: `enum4linux.txt` (1a linea = comando ejecutado) +
+  `enum4linux.json`/`enum4linux.yaml` (solo si hubo sesion establecida y al menos una seccion con
+  datos; si no, se elimina — ruido sin hallazgo).
+- En macOS el Step 11 NO se ejecuta: `skipped_unsupported_os` en el manifest, sin tráfico.
+- Si no hay 139/445 → `skipped_no_smb`.
+
 ## 4. Service-Based Routing (Optimización — 2026-08-31)
 
 > Reemplaza el concepto rígido de "bifurcación no-web". El pipeline decide **por step** según
@@ -337,6 +372,8 @@ Tras el post-proceso del Step 2 y el Step 3:
 | 8 | SSLyze | ≥1 puerto con túnel SSL/TLS (del Step 3) | `skipped_no_tls` |
 | 9 | IIS Shortname | `web_on` (hay web) **y** `httpx.json.webserver` contiene `Microsoft-IIS`/`IIS` | `skipped_no_iis` |
 | 10 | SMB Enum | TCP 139 ó 445 abierto (`open_ports.txt` o `nmap_detailed.xml`) | `skipped_no_smb` |
+| 11 | LDAP Enum (ldapsearch) | TCP 389, 636, 3268 ó 3269 abierto (Linux y macOS) | `skipped_no_ldap` |
+| 12 | Enum4linux | TCP 139 ó 445 abierto **y SO Linux** (`uname -s` distinto de Darwin) | `skipped_no_smb` / `skipped_unsupported_os` |
 
 - **El pipeline continúa sano ante cualquier `skipped_*`**: no es un error, no aborta el target;
   los hallazgos de servicios no-web del Step 3 y del Step 4 siguen al Agente 3.
@@ -370,12 +407,14 @@ Esquema exacto (igual a design.md):
     {"step": 7, "tool": "gobuster", "status": "skipped_no_web", "output": []},
     {"step": 8, "tool": "sslyze", "status": "skipped_no_tls", "output": []},
     {"step": 9, "tool": "iis_shortname", "status": "skipped_no_iis", "output": []},
-    {"step": 10, "tool": "smbclient_enum", "status": "skipped_no_smb", "output": []}
+    {"step": 10, "tool": "smbclient_enum", "status": "skipped_no_smb", "output": []},
+    {"step": 11, "tool": "ldap_enum", "status": "skipped_no_ldap", "output": []},
+    {"step": 12, "tool": "enum4linux", "status": "skipped_unsupported_os", "output": []}
   ],
   "out_of_scope_findings": [],
   "errors": []
 }
 ```
 
-- Estados válidos de `status`: `success` | `failed` | `skipped` (WhatWeb sin binario disponible) | `skipped_no_ports` (Nuclei sin puertos) | `skipped_no_web` (Nikto/WhatWeb/Gobuster-dir sin web) | `skipped_no_domain` | `skipped_no_tftp` | `skipped_no_tls` | `skipped_no_iis` (Step 9 sin web o sin firma Microsoft-IIS) | `skipped_no_smb` (Step 10 sin 139/445 abiertos). `tools_executed` contiene SIEMPRE los 10 steps (10 entradas), inclusive los saltados.
+- Estados válidos de `status`: `success` | `failed` | `skipped` (WhatWeb sin binario disponible) | `skipped_no_ports` (Nuclei sin puertos) | `skipped_no_web` (Nikto/WhatWeb/Gobuster-dir sin web) | `skipped_no_domain` | `skipped_no_tftp` | `skipped_no_tls` | `skipped_no_iis` (Step 9 sin web o sin firma Microsoft-IIS) | `skipped_no_smb` (Steps 10/12 sin 139/445 abiertos), `skipped_no_ldap` (Step 11 sin 389/636/3268/3269) y `skipped_unsupported_os` (Step 12 en macOS: no se ejecuta). `tools_executed` contiene SIEMPRE los 12 steps (12 entradas), inclusive los saltados.
 - Se genera al terminar el pipeline del target (o al abandonarlo por `incomplete`).

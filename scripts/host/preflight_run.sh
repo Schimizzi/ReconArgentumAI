@@ -2,7 +2,7 @@
 # preflight_run.sh - Verificaciones previas a FASE 1 (RUN10).
 # UNIFICACIÓN KALI/DOCKER (2026-09-07): las wordlists se resuelven de forma portable
 # (mismo criterio que step7_gobuster.sh) y se agregan smbclient + ping a la verificación,
-# porque el Agente 1 completo (Steps  1-10) los requiere en VM Kali y en el contenedor.
+# porque el Agente 1 completo (Steps  1-11) los requiere en VM Kali y en el contenedor.
 set -uo pipefail
 WS="${WORKSPACE:-$(pwd)}"
 fail=0
@@ -42,6 +42,23 @@ for t in nmap nuclei nikto gobuster sslyze smbclient ping jq python3; do
     echo "  FALTA $t"; fail=1
   fi
 done
+# ldapsearch (Step 11 - LDAP Enum): requerido en Linux Y macOS.
+if command -v ldapsearch >/dev/null 2>&1; then
+  echo "  OK  ldapsearch -> $(command -v ldapsearch)"
+else
+  echo "  FALTA ldapsearch (instalar: sudo apt install ldap-utils)"; fail=1
+fi
+
+# Enum4linux (Step 12): SOLO Linux (en macOS el Step queda skipped_unsupported_os).
+if [ "$(uname -s)" = "Darwin" ]; then
+  echo "  N/A enum4linux-ng (no aplica en macOS: el Step 12 no se ejecuta)"
+elif command -v enum4linux-ng >/dev/null 2>&1; then
+  echo "  OK  enum4linux-ng -> $(command -v enum4linux-ng)"
+elif command -v enum4linux >/dev/null 2>&1; then
+  echo "  OK  enum4linux -> $(command -v enum4linux) (fallback Perl; sin export JSON)"
+else
+  echo "  FALTA enum4linux-ng (instalar: sudo apt install enum4linux-ng)"; fail=1
+fi
 # HTTPX de probe (ProjectDiscovery): prioridad `httpx-toolkit` → `httpx-pd` → `httpx`.
 # En Kali Linux el binario PD se llama `httpx-toolkit`; en macOS/contenedor `httpx-pd`.
 # El `httpx` del PATH (cliente Python) solo se acepta si soporta `-l` (PD real).
@@ -67,6 +84,22 @@ if [ ! -s "$WS/config/scope.json" ] || [ ! -s "$WS/config/stealth.yaml" ]; then
 else
   TARGETS=()
   while IFS= read -r _t; do TARGETS+=("$_t"); done < <(jq -r '.authorized_targets[].ip' "$WS/config/scope.json")
+  # R1-bis: los target_id DEBEN ser unicos. Si dos targets comparten id, los
+  # manifiestos y los informes por target se pisan entre sí (bug real detectado
+  # en el run de octubre 2026: 4 IPs con id S-10.10.10.80 y 5 con S-10.10.10.195).
+  DUP_IDS=$(jq -r '.authorized_targets[].id // ""' "$WS/config/scope.json" | sort | uniq -d)
+  EMPTY_IDS=$(jq -r '.authorized_targets[] | select((.id // "") == "") | .ip' "$WS/config/scope.json")
+  if [ -n "$DUP_IDS" ]; then
+    echo "  ERROR ids DUPLICADOS en scope.json (cada target necesita id unico):"
+    echo "$DUP_IDS" | sed 's/^/    - /'
+    fail=1
+  fi
+  if [ -n "$EMPTY_IDS" ]; then
+    echo "  ERROR targets SIN id en scope.json:"; echo "$EMPTY_IDS" | sed 's/^/    - /'; fail=1
+  fi
+  if [ -z "$DUP_IDS$EMPTY_IDS" ]; then
+    echo "  OK  target_id unicos ($(jq -r '.authorized_targets|length' "$WS/config/scope.json") targets)"
+  fi
   for T in "${TARGETS[@]}"; do
     if jq -e --arg ip "$T" 'any(.excluded_ips[]; . == $ip)' "$WS/config/scope.json" >/dev/null 2>&1; then
       echo "  EXCLUIDO (R1): $T - NUNCA se escanea"; continue

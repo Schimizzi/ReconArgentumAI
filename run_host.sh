@@ -2,7 +2,7 @@
 # =============================================================================
 # run_host.sh — Lanzador del pipeline en MODO HOST (macOS)
 # Use ESTE modo para escanear tu LAN local (Docker Desktop/mac no ve la LAN).
-# Arquitectura híbrida: este modo corre las 9 tools DIRECTAMENTE en el host.
+# Arquitectura híbrida: este modo corre las 10 tools DIRECTAMENTE en el host.
 # =============================================================================
 set -u
 WORKSPACE="${PWD}"
@@ -35,12 +35,30 @@ elif command -v httpx >/dev/null 2>&1 && httpx -h 2>&1 | grep -qE -- '-l,| -list
 else
   MISSING+=("httpx-toolkit/httpx-pd"); echo "  FALTA httpx-toolkit/httpx-pd (binario de probe ProjectDiscovery; el 'httpx' del PATH es el cliente Python)"
 fi
+# ldapsearch (Step 11 - LDAP Enum): requerido en Linux Y macOS.
+if command -v ldapsearch >/dev/null 2>&1; then
+  echo "  OK  ldapsearch -> $(command -v ldapsearch)"
+else
+  MISSING+=("ldapsearch"); echo "  FALTA ldapsearch (Linux: sudo apt install ldap-utils)"
+fi
+
+# Enum4linux (Step 12): SOLO Linux; en macOS el step queda skipped_unsupported_os.
+if [ "$(uname -s)" != "Darwin" ]; then
+  if command -v enum4linux-ng >/dev/null 2>&1; then
+    echo "  OK  enum4linux-ng -> $(command -v enum4linux-ng)"
+  else
+    MISSING+=("enum4linux-ng"); echo "  FALTA enum4linux-ng (Linux: sudo apt install enum4linux-ng)"
+  fi
+else
+  echo "  N/A enum4linux-ng (no aplica en macOS: Step 12 solo Linux)"
+fi
 if [ "${#MISSING[@]}" -gt 0 ]; then
   echo ""
   echo "❌ Faltan herramientas. Instalá con:"
   echo "    brew install nikto gobuster pipx"
   echo "    pipx install sslyze"
   echo "    (whatweb: git clone en tools/WhatWeb + gem install addressable -v 2.8.7)"
+  echo "    (Linux/Debian: sudo apt install enum4linux-ng)  # Step 12 (no aplica en macOS)"
   echo "    O ejecutá: scripts/install_host_tools.sh"
   exit 1
 fi
@@ -60,7 +78,7 @@ echo ">>> CÓMO ARRANCAR EL PIPELINE EN ESTE MODO:"
 echo "   ·  SIN LLM (Agente 1 automático — verificar preflight y lanzar):"
 echo "        bash scripts/host/preflight_run.sh              # check de tools + wordlists"
 echo "        WORKSPACE=\${WORKSPACE:-$(pwd)} bash scripts/host/run_fase1_run3.sh"
-echo "        #  → Fase 1 completa (10 steps) para todos los targets de scope.json, sin LLM."
+echo "        #  → Fase 1 completa (11 steps) para todos los targets de scope.json, sin LLM."
 echo "        #  → Target puntual:  bash scripts/host/run_target.sh <IP>"
 echo "   ·  CON LLM (Orchestrator en Cline):"
 echo "       1. Abrí Cline en ${WORKSPACE} (o pedile que abra el proyecto)."

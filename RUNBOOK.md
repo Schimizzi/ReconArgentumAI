@@ -15,8 +15,10 @@
 |---|---|---|---|
 | preflight_run.sh | `WS/scripts/host/preflight_run.sh` | Verifica dependencias, wordlists, scope, R3 locks | `bash WS/scripts/host/preflight_run.sh` |
 | run_fase1_run3.sh | `WS/scripts/host/run_fase1_run3.sh` | Runner maestro multi-target (Fase 1 completa) | `zsh -i -c "cd $WS && bash scripts/host/run_fase1_run3.sh"` |
-| run_target.sh | `WS/scripts/host/run_target.sh` | Pipeline 10-steps por target | NO ejecutar directamente |
-| cve_research_vulnx.py | `WS/scripts/cve_research_vulnx.py` | CVE Research usando vulnx (Agente 4) | `python3 WS/scripts/cve_research_vulnx.py --target-id X --target-ip Y --nmap ... --whatweb ... --nuclei ...` |
+| run_target.sh | `WS/scripts/host/run_target.sh` | Pipeline 12-steps por target | NO ejecutar directamente |
+| cve_research_vulnx.py | `WS/scripts/cve_research_vulnx.py` | CVE Research usando vulnx + watchlist de advisories (Agente 4) | `python3 WS/scripts/cve_research_vulnx.py --target-id X --target-ip Y --nmap ... --whatweb ... --nuclei ... --advisories WS/config/advisories` |
+| php2shell_audit.py | `WS/scripts/php2shell_audit.py` | Auditoría offline PHP2Shell (CVE-2026-109618/619) → alimenta CK-10 | `python3 WS/scripts/php2shell_audit.py --all` (o `--target-ip X`) |
+| php2shell_check.sh | `WS/scripts/host/php2shell_check.sh` | Verificación **en campo** PHP2Shell (VM con VPN): pasiva / fingerprint / detect / host-check | `bash WS/scripts/host/php2shell_check.sh --target X --passive` |
 | organize_project.py | `WS/scripts/organize_project.py` | Consolida outputs/ en dir proyecto (Fase 4) | `cd $WS && python3 scripts/organize_project.py` |
 | make_vuln_report.py | `WS/scripts/make_vuln_report.py` | Genera resúmenes de hallazgos (Fase 4) | `python3 WS/scripts/make_vuln_report.py --project CLIENTE` |
 
@@ -24,7 +26,8 @@
 | Archivo | Ruta | Uso |
 |---|---|---|
 | scope.json | `WS/config/scope.json` | Targets autorizados, engagement_id, exclusiones |
-| stealth.yaml | `WS/config/stealth.yaml` | Timeouts, rates, delays, threads por herramienta |
+| stealth.yaml | `WS/config/stealth.yaml` | Timeouts, rates, delays, threads por herramienta (+ `php2shell_*` del check de campo) |
+| advisories/ | `WS/config/advisories/*.json` | Watchlist local de CVEs críticos recientes (PHP2Shell) — versionada |
 | approved_commands.md | `WS/config/approved_commands.md` | Comandos aprobados en Fase 0 (fuente única de ejecución) |
 
 ### Directorios de salida
@@ -84,10 +87,10 @@ Si preflight falla → informar al usuario con el error exacto. No continuar a F
 PAUSA. Presenta al usuario humano:
 - Targets autorizados de scope.json
 - Modo: Host (macOS nativo)
-- Pipeline: 10 steps / 9 tools
+- Pipeline: 12 steps / 11 tools
 - Engagement ID de scope.json
 
-Itera sobre cada herramienta (Nmap, HTTPX, Nuclei, Nikto, WhatWeb, Gobuster, SSLyze, IIS Shortname, SMB Enum):
+Itera sobre cada herramienta (Nmap, HTTPX, Nuclei, Nikto, WhatWeb, Gobuster, SSLyze, IIS Shortname, SMB Enum, LDAP Enum, Enum4linux):
 1. ¿Usar? (SÍ/NO)
 2. Si SÍ → puertos, contexto WAF/IDS/EDR
 3. Si WAF o tarpits → SUGERIR rate-limit bajo + timeout alto
@@ -141,6 +144,7 @@ Si `status` es `failed` o `incomplete` → target incompleto. CONTINUAR con sigu
 | `❌ R3-FAIL: otro pipeline está corriendo sobre <IP>` | DETENER. Esperar otro pipeline. |
 | `TARGET_FASE1_INCOMPLETE <IP>` | SALTAR target. Continuar resto. |
 | `FALTA <tool>` en preflight | DETENER. Informar usuario. |
+| `ERROR ids DUPLICADOS en scope.json` (preflight) | DETENER. Cada target necesita su propio id (`S-<ip>`); con ids repetidos los manifiestos y los informes por target se pisan. |
 | `rc ≠ 0` en run_fase1_run3.sh | DETENER. Informar error exacto. |
 ---
 
@@ -160,10 +164,14 @@ OUTDIR=\$WORKSPACE/cve_research
 
 1. Verifica: ls \$EVID/nmap_detailed.json
 2. target_id: jq -r '.authorized_targets[] | select(.ip == \"$TARGET_IP\") | .id' \$WORKSPACE/config/scope.json
-3. Ejecuta CVE Research:
-   python3 \$WORKSPACE/scripts/cve_research_vulnx.py --target-id \$TARGET_ID --target-ip \$TARGET_IP --nmap \$EVID/nmap_detailed.json --whatweb \$EVID/whatweb.json --nuclei \$EVID/nuclei.json
-4. Verifica: cat \$WORKSPACE/cve_research/\${TARGET_ID}_cves.json | head -50
-5. Responde: >>> FASE2a_OK | TARGET:[id] | CVES:\$WORKSPACE/cve_research/\${TARGET_ID}_cves.json | TOTAL_CVES:[summary.total_cves]
+3. Ejecuta CVE Research (con watchlist local de advisories criticos):
+   python3 \$WORKSPACE/scripts/cve_research_vulnx.py --target-id \$TARGET_ID --target-ip \$TARGET_IP --nmap \$EVID/nmap_detailed.json --whatweb \$EVID/whatweb.json --nuclei \$EVID/nuclei.json --evidence-dir \$EVID --cliente-dir \$WORKSPACE/CLIENTE/\$TARGET_IP/outputs --advisories \$WORKSPACE/config/advisories
+4. Auditoria PHP2Shell (OBLIGATORIA):
+   python3 \$WORKSPACE/scripts/php2shell_audit.py --target-ip \$TARGET_IP
+   cat \$WORKSPACE/cve_research/\${TARGET_ID}_php2shell.json | jq '{target_id, version:.php.version, status:.php.status, sapi:.php.sapi_hint}'
+   (Si el estado es affected o eol_sin_parche, los CVE-2026-109618/109619 DEBEN estar en \${TARGET_ID}_cves.json.)
+5. Verifica: cat \$WORKSPACE/cve_research/\${TARGET_ID}_cves.json | head -50
+6. Responde: >>> FASE2a_OK | TARGET:[id] | CVES:\$WORKSPACE/cve_research/\${TARGET_ID}_cves.json | TOTAL_CVES:[summary.total_cves] | WATCHLIST:[summary.watchlist_cves] | PHP2SHELL:[status]
    Error: >>> FASE2a_ERROR | [error]" chat
 ```
 
@@ -316,12 +324,65 @@ Tu única función es ejecutar el script y parsear su salida.
 ### Criterios de bloqueo
 | Salida | Significado | Acción |
 |---|---|---|
+| `>>> QA_FAIL | FAILS:CK-01, ...` | `scope.json` inválido o **`target_id` duplicados / sin id** | DETENER. Corregir `config/scope.json` (un id por target, ej. `S-<ip>`) y re-ejecutar preflight. |
 | `>>> QA_FAIL | FAILS:CK-04, ...` | Inconsistencia en CVEs | DETENER. Informar error exacto al usuario. |
 | `>>> QA_FAIL | FAILS:CK-07, ...` | Secreto sin ofuscar en reportes | DETENER. Corregir ofuscación. |
 | `>>> QA_FAIL | FAILS:CK-02, ...` | Outputs de escaneo faltan | SALTAR target afectado si es parcial. |
 | `>>> QA_FAIL | FAILS:CK-05, ...` | Plan con refs a archivos inexistentes | DETENER. Plan inválido. |
 | `>>> QA_FAIL | FAILS:CK-08, ...` | Sin deliverables Fase 4 | CONTINUAR (no bloqueante). |
+| `>>> QA_FAIL | FAILS:CK-09, ...` | Manifest sin los 12 steps del DAG o herramientas fuera del contrato (Steps 11=`ldap_enum`, 12=`enum4linux`) | DETENER. Re-ejecutar la Fase 1 (Steps 1..12) del target. |
+| `>>> QA_FAIL | FAILS:CK-10, ...` | **PHP2Shell** (u otro advisory crítico local) presente en un target y **ausente** de `cve_research/<id>_cves.json` | DETENER. Re-ejecutar Fase 2a con `--advisories` y/o `php2shell_audit.py`. Para degradarlo a aviso: `QA_PHP2SHELL_BLOCKING=0`. |
 | Exit code ≠ 0 sin `>>> QA_*` | Error de script | DETENER. Revisar qa_check.py. |
+
+### §5.1 Validación de los Steps 11/12 (LDAP + Enum4linux) — pre-QA
+
+Además del QA global, todo cambio en los Steps 11/12 se valida con el script asistido:
+
+```bash
+# 1) Incremental sobre la evidencia existente (no re-escanea nada)
+bash scripts/host/validate_step11_12.sh <IP> --ev-dir evidence/<IP>
+# 2) + modo credencializado (solo si la Fase 0 lo aprobó): verifica anti-fuga del password
+bash scripts/host/validate_step11_12.sh <IP> --creds usuario@dominio:password
+# 3) Corrida completa de UN target + contrato del manifest (12 entradas)
+bash scripts/host/validate_step11_12.sh <IP> --full
+# 4) Consolidador + QA final sobre el cliente
+bash scripts/host/validate_step11_12.sh <IP> --project CLIENTE
+# 5) Ver qué haría, sin tocar nada
+bash scripts/host/validate_step11_12.sh <IP> --dry-run
+# 6) SOLO V-08a (Agente 6 aislado, SIN trafico) — re-verificar el reporte tras tocar make_vuln_report.py
+bash scripts/host/validate_step11_12.sh <IP> --v08a-only
+```
+
+Checks V-01..V-08:
+
+| Check | Qué verifica |
+|---|---|
+| V-01 | `ldapsearch` y `enum4linux-ng`/`enum4linux` presentes |
+| V-02 | `evidence/<IP>/nmap_detailed.xml` existe |
+| V-03 | Expectativa derivada del XML (puertos LDAP 389/636/3268/3269, SMB 139/445 y workgroup) |
+| V-04 | Step 11: `STEP_LDAP_DONE` + `ldapsearch.txt` (1a línea = comando) **o** `skipped_no_ldap` sin tráfico |
+| V-05 | Step 12: `STEP_ENUM4LINUX_DONE` con workgroup del XML **o** skip correcto (`skipped_no_smb` / `skipped_unsupported_os` en macOS) |
+| V-06 | (con `--creds`) el password NO queda en la evidencia ni en `/tmp`, y se generan users/SPN |
+| V-07 | (con `--full`) manifest con **12 entradas**, step 11 = `ldap_enum`, step 12 = `enum4linux`, y `_step.log` con 12 líneas `Step N/12` |
+| V-08a | **Agente 6 aislado** (corre siempre): staging temporal con symlinks -> `make_vuln_report.py` y verifica que el reporte incluya los hallazgos que la evidencia **puede** producir (*expectation-aware*): LDAP sólo si hay `ldapsearch*.txt`; enum4linux sólo si hay `enum4linux.*`, o el hallazgo de **sesión SMB anónima rechazada** si hay nota `*_sin_sesion.txt`; dedupe de usuarios cuando hay evidencia AD. Sin evidencia AD informa `[SKIP]` (antes daba 2 falsos positivos). **No toca `CLIENTE/`** |
+| V-08b | (con `--project`) cadena de produccion: `organize_project.py --target --no-clobber` + `make_vuln_report.py` + `qa_check.py` con `SCOPE_FILTER_IP` (CK-02/CK-09 solo de ese target). **Escribe en el proyecto** |
+
+> 🔁 **Re-run de un target (`--full`)**: el script hace **backup automático** de la evidencia previa
+> en `/tmp/backup_<IP>_<timestamp>` (`--no-backup` lo omite). Motivo: el `manifest.json` declara sus
+> `output` con **globs** sobre el dir de evidencia, así que tras un re-run un step `failed` puede
+> quedar "cubierto" por archivos de corridas anteriores (existen, pero son viejos) y `CK-02` no lo
+> detecta. Con el backup se comparan fechas (`ls -la`) antes/después.
+
+> ⚠️ **NO editar los scripts mientras la VM los está ejecutando.** Con la carpeta compartida de
+> Parallels la VM lee el **mismo archivo**: bash lee el script por bloques, así que una edición en
+> caliente produce errores espurios (`syntax error near unexpected token`, `1: command not found`) y
+> aborta la corrida (caso real: `10.10.11.8` durante el fix del 2026-10-22). Terminá la corrida
+> antes de aplicar cambios. Si usás tu propio `cp -r` como backup, agregá `--no-backup` al validador
+> para no duplicar el backup.
+
+**Éxito:** `>>> VALIDATE_STEP11_12_OK` + exit 0. **Bloqueo:** `>>> VALIDATE_STEP11_12_FAIL` → revisar los `[FAIL]` (el script imprime el detalle y la salida cruda de los steps).
+
+> ⚠️ **Manifests previos al cambio:** los `manifest.json` generados antes de este cambio tienen 10/11 steps → CK-09 los marca `[FAIL]` a propósito. Se corrigen re-ejecutando la Fase 1 (Steps 1..12) del target.
 
 ## §6 PROTOCOLO DE ERRORES GLOBAL
 
@@ -334,7 +395,8 @@ Tu única función es ejecutar el script y parsear su salida.
 | vulnx no instalado | F2a | 🟡 ADVERTENCIA | CONTINUAR sin CVEs. |
 | organize fail (sin evidence) | F4 | 🔴 BLOQUEANTE | DETENER. Falta Fase 1. |
 | make_vuln fail (sin project) | F4 | 🟡 RECUPERABLE | Ejecutar organize primero. |
-| QA_CHECK CK-04/CK-05/CK-07 fail | F5 | 🔴 BLOQUEANTE | DETENER. Ver detalle del check. |
+| QA_CHECK CK-01 fail | F5 | 🔴 BLOQUEANTE | DETENER. Corregir `config/scope.json` (target_id únicos) y re-ejecutar preflight. |
+| QA_CHECK CK-04/CK-05/CK-07/CK-10 fail | F5 | 🔴 BLOQUEANTE | DETENER. Ver detalle del check. |
 | QA_CHECK CK-02 fail | F5 | 🟡 PARCIAL | SALTAR target afectado. Continuar. |
 | QA_CHECK CK-08 fail | F5 | 🟡 ADVERTENCIA | CONTINUAR. No bloqueante. |
 

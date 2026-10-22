@@ -1,6 +1,6 @@
 #!/bin/bash
 # ===========================================================================
-# run_target.sh — Orquestador MODO HOST por target (DAG 10 steps / 9 tools)
+# run_target.sh — Orquestador MODO HOST por target (DAG 11 steps / 10 tools)
 # Uso: run_target.sh <TARGET_IP>
 # Respeta R1 (scope), R3 (delays 30s entre tools), R4 (evidencia completa),
 # y el retry 1x de la spec (§5). Genera evidence/<target> + manifest.json.
@@ -29,7 +29,7 @@ mkdir -p "$EVID"
 LOCKDIR="$EVID/.run.lock"
 if ! mkdir "$LOCKDIR" 2>/dev/null; then
   # R3-STALE (2026-09-29): si el lock tiene mas de 30 min, se asume stale
-  # y se limpia automaticamente. El pipeline completo (10 steps) no deberia
+  # y se limpia automaticamente. El pipeline completo (11 steps) no deberia
   # tomar mas de ~15-20 min; 30 min es un margen seguro.
   if [ -d "$LOCKDIR" ] && [ -n "$(find "$LOCKDIR" -mmin +30 -type d 2>/dev/null)" ]; then
     echo "⚠️  R3-STALE ($(date +%H:%M:%S)): lock ${LOCKDIR} tiene mas de 30 min (stale). Limpiando..." >&2
@@ -50,6 +50,7 @@ DELAY_TOOLS=$(grep '^delay_between_tools_seconds' "$WS/config/stealth.yaml" | aw
 DELAY_TOOLS="${DELAY_TOOLS:-30}"
 TARGET_ID=$(jq -r --arg ip "$TARGET" '.authorized_targets[] | select(.ip == $ip) | .id' "$WS/config/scope.json" 2>/dev/null | head -1)
 TARGET_ID="${TARGET_ID:-$TARGET}"
+PLATFORM_SKIP=skipped_no_smb; [ "$(uname -s)" = "Darwin" ] && PLATFORM_SKIP=skipped_unsupported_os
 
 log() { echo "[$(date +%H:%M:%S)] $*"; }
 
@@ -100,7 +101,7 @@ run_retry() {
 }
 
 # ---- Step 1: Nmap port scan --------------------------------------------------
-log "Step 1/10 - Nmap port scan -p clienteP (-sT, -Pn -n, timing/rate default de Nmap) sobre $TARGET"
+log "Step 1/12 - Nmap port scan -p clienteP (-sT, -Pn -n, timing/rate default de Nmap) sobre $TARGET"
 R1=$(run_retry nmap_ports bash "$WS/scripts/host/step1_nmap_ports.sh" "$TARGET")
 
 # ---- Post-proceso Step 1: open_ports.txt -------------------------------------
@@ -120,7 +121,7 @@ if [ "$NPORTS" -eq 0 ]; then
   "target_id": "$TARGET_ID",
   "started_at": "$STARTED",
   "status": "incomplete",
-  "notes": "Sin puertos abiertos (clienteP autorizado, Step 1). Steps 2-10 skipped (Service-Based Routing).",
+  "notes": "Sin puertos abiertos (clienteP autorizado, Step 1). Steps 2-11 skipped (Service-Based Routing).",
   "tools_executed": [
     {"step": 1, "tool": "nmap_ports", "status": "$R1", "output": ["nmap_ports.json", "nmap_ports.xml", "nmap_ports.txt", "nmap_ports.gnmap", "open_ports.txt"]},
     {"step": 2, "tool": "httpx", "status": "skipped_no_ports", "output": []},
@@ -131,7 +132,9 @@ if [ "$NPORTS" -eq 0 ]; then
     {"step": 7, "tool": "gobuster", "status": "skipped_no_web", "output": []},
     {"step": 8, "tool": "sslyze", "status": "skipped_no_tls", "output": []},
     {"step": 9, "tool": "iis_shortname", "status": "skipped_no_iis", "output": []},
-    {"step": 10, "tool": "smbclient_enum", "status": "skipped_no_smb", "output": []}
+    {"step": 10, "tool": "smbclient_enum", "status": "skipped_no_smb", "output": []},
+    {"step": 11, "tool": "ldap_enum", "status": "skipped_no_ldap", "output": []},
+    {"step": 12, "tool": "enum4linux", "status": "$PLATFORM_SKIP", "output": []}
   ],
   "out_of_scope_findings": [],
   "errors": []
@@ -143,7 +146,7 @@ fi
 log "✅ Puertos abiertos: $(tr '\n' ' ' < "$EVID/open_ports.txt")"
 sleep "$DELAY_TOOLS"
 # ---- Step 2: HTTPX probe -----------------------------------------------------
-log "Step 2/10 — HTTPX probe web"
+log "Step 2/12 — HTTPX probe web"
 R2=$(run_retry httpx bash "$WS/scripts/host/step2_httpx.sh" "$TARGET")
 
 # post-proceso: web_endpoints.txt desde httpx.json
@@ -157,7 +160,7 @@ log "✅ Endpoints web: ${WURLS}"
 sleep "$DELAY_TOOLS"
 
 # ---- Step 3: Nmap detallado (siempre, sobre open_ports) ----------------------
-log "Step 3/10 — Nmap -sT -sC -sV detallado (solo puertos abiertos)"
+log "Step 3/12 — Nmap -sT -sC -sV detallado (solo puertos abiertos)"
 R3=$(run_retry nmap_detailed bash "$WS/scripts/host/step3_nmap_detailed.sh" "$TARGET")
 # ---- Steps 4-8: Service-Based Routing (Optimización Multiprotocolo 2026-08-31) ----
 web_on() { [ "${WURLS:-0}" -gt 0 ]; }
@@ -170,7 +173,7 @@ OUT4='[]'; OUT5='[]'; OUT6='[]'; OUT7='[]'; OUT8='[]'
 # Nuclei ya NO depende de web_endpoints.txt. Apunta a IP:PORT para aplicar plantillas
 # de red/SSH/DNS/TLS además de las web. (Optimización Multiprotocolo 2026-08-31)
 if [ "$NPORTS" -gt 0 ]; then
-  log "Step 4/10 — Nuclei (multiprotocolo, sobre open_ports.txt)"
+  log "Step 4/12 — Nuclei (multiprotocolo, sobre open_ports.txt)"
   R4=$(run_retry nuclei bash "$WS/scripts/host/step4_nuclei.sh" "$TARGET")
   STATUS4=success; [ "$R4" = FAIL ] && STATUS4=failed
   sleep "$DELAY_TOOLS"
@@ -179,7 +182,7 @@ else
 fi
 
 if web_on; then
-  log "Step 5/10 — Nikto (solo web, por endpoint, secuencial)"
+  log "Step 5/12 — Nikto (solo web, por endpoint, secuencial)"
   STATUS5=success
   # FIX ROOT-CAUSE 2026-08-31: cargar las URLs UNA vez a un array ANTES del loop.
   # Un `while read < archivo` compartia el fd con los hijos (nikto lee stdin) y el
@@ -209,7 +212,7 @@ if web_on; then
   # era "no instalado", pero en Kali viene instalado por defecto (/usr/bin/whatweb) y el
   # repo trae tools/WhatWeb/whatweb. Si el binario existe en PATH o en el repo → corre
   # (genera whatweb.json); si no existe → skipped (mantiene la decisión Fase 0).
-  log "Step 6/10 — WhatWeb (auto-detección: binario en PATH o tools/WhatWeb/whatweb)"
+  log "Step 6/12 — WhatWeb (auto-detección: binario en PATH o tools/WhatWeb/whatweb)"
   WWBIN="$(command -v whatweb || echo "$WS/tools/WhatWeb/whatweb")"
   if [ -x "$WWBIN" ]; then
     R6=$(run_retry whatweb bash "$WS/scripts/host/step6_whatweb.sh" "$TARGET")
@@ -226,7 +229,7 @@ else
 fi
 
 # ---- Step 7: Gobuster — multi-modo dir/dns/tftp ------------------------------------
-log "Step 7/10 — Gobuster (Service-Based: dir si web, dns si dominio, tftp si UDP69)"
+log "Step 7/12 — Gobuster (Service-Based: dir si web, dns si dominio, tftp si UDP69)"
 STATUS7=skipped_no_web
 RAN7=0; FAILED7=0
 
@@ -294,7 +297,7 @@ elif [ "$FAILED7" -eq 1 ]; then
 fi
 
 # ---- Step 8: SSLyze — puertos TLS detectados por Nmap (Step 3) ----------------------
-log "Step 8/10 — SSLyze (puertos TLS del Step 3, Service-Based)"
+log "Step 8/12 — SSLyze (puertos TLS del Step 3, Service-Based)"
 STATUS8=skipped_no_tls
 TLS_LINES=$(python3 "$WS/scripts/host/detect_tls_ports.py" "$EVID" --with-starttls 2>/dev/null || true)
 if [ -n "$TLS_LINES" ]; then
@@ -308,7 +311,7 @@ if [ -n "$TLS_LINES" ]; then
 fi
 sleep "$DELAY_TOOLS"
 # ---- Step 9: IIS Shortname (Service-Based: solo si web_on + firma IIS en httpx.json) ----
-log "Step 9/10 — IIS Shortname Disclosure 8.3 (requiere web + firmware Microsoft-IIS en httpx.json)"
+log "Step 9/12 — IIS Shortname Disclosure 8.3 (requiere web + firmware Microsoft-IIS en httpx.json)"
 STATUS9=skipped_no_iis
 if web_on && [ -s "$EVID/httpx.json" ]; then
   IIS_HTTPX=$(python3 - "$EVID/httpx.json" <<'PY' 2>/dev/null
@@ -351,7 +354,7 @@ sleep "$DELAY_TOOLS"
 # directo en evidence/<IP>/. --force para que el pipeline sobrescriba evidencia
 # previa (al contrario del no-clobber del modo manual). --no-ping-check porque el
 # target ya respondió en Steps 1-3 del propio pipeline (no duplicar el gate ICMP).
-log "Step 10/10 — smbclient_enum (SMB 139/445, solo si abiertos)"
+log "Step 10/12 — smbclient_enum (SMB 139/445, solo si abiertos)"
 STATUS10=skipped_no_smb
 HAS_SMB=0
 if [ -s "$EVID/open_ports.txt" ]; then
@@ -385,6 +388,52 @@ else
   log "  → sin 139/445 en open_ports.txt ni nmap_detailed.xml → skipped_no_smb"
   STATUS10=skipped_no_smb
 fi
+# ---- Step 11: LDAP Enum (ldapsearch; corre en Linux Y macOS) ----------------
+log "Step 11/12 - LDAP enum (ldapsearch; AD)"
+STATUS11=skipped_no_ldap
+HAS_LDAP=0
+if [ -s "$EVID/open_ports.txt" ] && grep -qE ":(389|636|3268|3269)$" "$EVID/open_ports.txt"; then HAS_LDAP=1; fi
+if [ "$HAS_LDAP" -eq 0 ] && [ -s "$EVID/nmap_detailed.xml" ]; then
+  LD_XML=$(python3 - "$EVID/nmap_detailed.xml" <<PY
+import sys, xml.etree.ElementTree as ET
+try:
+    tree = ET.parse(sys.argv[1])
+except Exception:
+    sys.exit(0)
+found = 0
+for p in tree.iter("port"):
+    st = p.find("state")
+    if st is None or st.get("state") != "open":
+        continue
+    if p.get("protocol") == "tcp" and p.get("portid") in ("389", "636", "3268", "3269"):
+        found = 1
+        break
+print(found)
+PY
+)
+  [ "$LD_XML" = "1" ] && HAS_LDAP=1
+fi
+if [ "$HAS_LDAP" -eq 1 ]; then
+  log "  -> LDAP/GC (389/636/3268/3269) abierto en $TARGET"
+  R11=$(run_retry ldap_enum bash "$WS/scripts/host/step11_ldap_enum.sh" --ev-dir "$EVID" --force --no-ping-check </dev/null)
+  if [ "$R11" = OK ] || [ "$R11" = OK_RETRY ]; then STATUS11=success; else STATUS11=failed; fi
+else
+  log "  -> sin 389/636/3268/3269 -> skipped_no_ldap"
+fi
+sleep "$DELAY_TOOLS"
+
+# ---- Step 12: Enum4linux (solo Linux: en macOS no se ejecuta) --------------
+log "Step 12/12 - enum4linux (AD/SMB; solo Linux)"
+STATUS12=$PLATFORM_SKIP
+if [ "$PLATFORM_SKIP" = "skipped_unsupported_os" ]; then
+  log "  -> macOS (Darwin): enum4linux no soportado -> skipped_unsupported_os"
+elif [ "$HAS_SMB" -eq 1 ]; then
+  log "  -> SMB (139/445) abierto en $TARGET (Linux)"
+  R12=$(run_retry enum4linux bash "$WS/scripts/host/step12_enum4linux_enum.sh" --ev-dir "$EVID" --force --no-ping-check </dev/null)
+  if [ "$R12" = OK ] || [ "$R12" = OK_RETRY ]; then STATUS12=success; else STATUS12=failed; fi
+else
+  log "  -> sin 139/445 -> skipped_no_smb"
+fi
 sleep "$DELAY_TOOLS"
 # ---- Manifest ----------------------------------------------------------------
 STATE1=success; [ "$R1" = FAIL ] && STATE1=failed
@@ -413,6 +462,8 @@ OUT3=$(mkjson 'nmap_detailed.*')
 OUT4=$(mkjson 'nuclei.json'); OUT5=$(mkjson 'nikto_*.json')
 OUT6=$(mkjson 'whatweb.json'); OUT7=$(mkjson 'gobuster_*.txt udp_69.gnmap'); OUT8=$(mkjson 'sslyze_*.json')
 OUT9=$(mkjson 'iis_shortname_* iis_scan_urls.txt'); OUT10=$(mkjson 'smbclient_*.txt smbclient_summary.txt')
+OUT11=$(mkjson 'ldapsearch*.txt')
+OUT12=$(mkjson 'enum4linux.* enum4linux_*.txt')
 
 cat > "$EVID/manifest.json" <<EOF
 {
@@ -430,7 +481,9 @@ cat > "$EVID/manifest.json" <<EOF
     {"step": 7, "tool": "gobuster", "status": "$STATUS7", "output": $OUT7},
     {"step": 8, "tool": "sslyze", "status": "$STATUS8", "output": $OUT8},
     {"step": 9, "tool": "iis_shortname", "status": "$STATUS9", "output": $OUT9},
-    {"step": 10, "tool": "smbclient_enum", "status": "$STATUS10", "output": $OUT10}
+    {"step": 10, "tool": "smbclient_enum", "status": "$STATUS10", "output": $OUT10},
+    {"step": 11, "tool": "ldap_enum", "status": "$STATUS11", "output": $OUT11},
+    {"step": 12, "tool": "enum4linux", "status": "$STATUS12", "output": $OUT12}
   ],
   "out_of_scope_findings": [],
   "errors": $ERRORS_JSON

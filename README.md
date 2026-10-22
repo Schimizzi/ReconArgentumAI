@@ -4,7 +4,7 @@
 
 [![Pipeline](https://img.shields.io/badge/Pipeline-10%20Steps%20·%209%20Tools-6f42c1)]() [![Fases](https://img.shields.io/badge/Fases-5-brightgreen)]() [![IA-Agnóstico](https://img.shields.io/badge/IA-Agnóstico-blue)]() [![Kali-Ready](https://img.shields.io/badge/Kali-Ready-00a859)]()
 
-ReconArgentumAI es una **plataforma de pentesting de infraestructura** que orquesta un pipeline de *recon* de **10 pasos sobre 9 herramientas** de seguridad, dirigido por un **modelo de IA** (agnóstico del proveedor) a través de Cline / Roo Code o Hermes Agent. El sistema **no explota nada**: produce evidencia completa en disco, planes de explotación documentados y **entregables por target** (`_resumen_vulnerabilidades.doc` + `_resumen_breve.txt`), siguiendo guardrails de scope, stealth y ofuscación inquebrantables.
+ReconArgentumAI es una **plataforma de pentesting de infraestructura** que orquesta un pipeline de *recon* de **12 pasos sobre 11 herramientas** de seguridad, dirigido por un **modelo de IA** (agnóstico del proveedor) a través de Cline / Roo Code o Hermes Agent. El sistema **no explota nada**: produce evidencia completa en disco, planes de explotación documentados y **entregables por target** (`_resumen_vulnerabilidades.doc` + `_resumen_breve.txt`), siguiendo guardrails de scope, stealth y ofuscación inquebrantables.
 
 Pensado para **red teams, auditores y equipos de seguridad ofensiva** que quieren *recon* reproducible, trazable y de bajo ruido, tanto contra **Internet** como contra la **LAN local** — desde una misma herramienta. Opcionalmente, la **Fase 1 (Recon)** puede ejecutarse **sin LLM** de forma totalmente automática (<code>--auto</code>), delegando la orquestación a scripts portables que deciden estados <code>success / failed / skipped_*</code>, retry 1x y delays desde configuración.
 
@@ -17,7 +17,7 @@ Pensado para **red teams, auditores y equipos de seguridad ofensiva** que quiere
 - [Modos de Ejecución](#-modos-de-ejecución)
 - [Prerrequisitos](#-prerrequisitos)
 - [Guía de Uso Rápido (Quick Start)](#-guía-de-uso-rápido-quick-start)
-- [Fase 1: Pipeline de Recon (10 Steps)](#-fase-1-pipeline-de-recon-10-steps)
+- [Fase 1: Pipeline de Recon (12 Steps)](#-fase-1-pipeline-de-recon-12-steps)
 - [Fase 2: Análisis](#-fase-2-análisis)
 - [Fase 4: Consolidación y Entregables](#-fase-4-consolidación-y-entregables)
 - [Fase 5: QA Final (Validación Determinista)](#-fase-5-qa-final-validación-determinista)
@@ -50,7 +50,7 @@ El pipeline se ejecuta en **5 fases**, orchestradas por un **Orchestrator lógic
 
 ```
 Fase 0  Calibración interactiva
-Fase 1  Recon secuencial (DAG 10 steps, 9 herramientas)
+Fase 1  Recon secuencial (DAG 12 steps, 11 herramientas)
 Fase 2  Análisis (Agente 3: plan de explotación + Agente 4: CVE research)
 Fase 4  Consolidación (organize_project.py + Agente 6: resúmenes doc/txt por target)
 Fase 5  QA Final (Agente 7: 8 checks deterministas, validación pre-entrega)
@@ -61,14 +61,14 @@ Fase 5  QA Final (Agente 7: 8 checks deterministas, validación pre-entrega)
 | Fase | Agente | Rol | Salida clave | Modo de ejecución |
 |---|---|---|---|---|
 | **0** | 🎛️ **Orchestrator** | Calibra las herramientas con el usuario (contexto de defensas, puertos, wordlists) y registra solo comandos aprobados. | `config/approved_commands.md` | 🤖 **LLM / Manual** |
-| **1** | 🔍 **Agente 1 — Recon Agent** | Ejecuta el DAG lineal de 10 steps (Nmap → HTTPX → Nmap -sC -sV → Nuclei → Nikto → WhatWeb → Gobuster → SSLyze → IIS Shortname → SMB Enum) con delays stealth, service-based routing y retry 1x. | `evidence/<target>/` + `manifest.json` | 🤖 **LLM / Automático sin LLM** (`--auto`) |
+| **1** | 🔍 **Agente 1 — Recon Agent** | Ejecuta el DAG lineal de 12 steps (Nmap → HTTPX → Nmap -sC -sV → Nuclei → Nikto → WhatWeb → Gobuster → SSLyze → IIS Shortname → SMB Enum → LDAP Enum → Enum4linux) con delays stealth, service-based routing y retry 1x. | `evidence/<target>/` + `manifest.json` | 🤖 **LLM / Automático sin LLM** (`--auto`) |
 | **2** | 🧠 **Agente 3 — Exploitation Planner** | Correlaciona evidencia por servicio con **protección de contexto** y redacta vectores accionables. **Nunca ejecuta exploits.** | `plans/<target_id>_exploitation_plan.md` | 🧠 **Solo LLM** |
 | **2** | 🔬 **Agente 4 — CVE Researcher** | Consulta **vulnx** (ProjectDiscovery, fuente única: NVD + Exploit-DB + advisories + CISA KEV), filtra CVSS ≥ 4.0 y rankea Top 3-5 por servicio con `rank_reason`. | `cve_research/<target_id>_cves.json` | 🧠 **Solo LLM** |
 | **4** | 📦 **Consolidador físico** | `organize_project.py` copia evidencia a `CLIENTE/<target>/{data,outputs}/` + genera README del proyecto. | `CLIENTE/<target>/{data,outputs}/` + `CLIENTE/README.md` | 🖥️ **Script** |
 | **4** | 📝 **Agente 6 — Consolidador de Hallazgos** | Lee solo `CLIENTE/<target>/outputs/`, extrae hallazgos con **cero invención** y genera 2 entregables por target. | `_resumen_vulnerabilidades.doc` + `_resumen_breve.txt` | 🖥️ **Script** (`make_vuln_report.py`) |
-| **5** | ✅ **Agente 7 — QA Final** | Ejecuta 8 checks deterministas (integridad, consistencia, trazabilidad, ofuscación) sobre todos los artefactos. **No usa LLM.** | Salida `[PASS]/[FAIL]` por check | 🖥️ **Script** (`qa_check.py`) |
+| **5** | ✅ **Agente 7 — QA Final** | Ejecuta 10 checks deterministas (integridad, consistencia, trazabilidad, ofuscación, advisory crítico sin reportar) sobre todos los artefactos. **No usa LLM.** | Salida `[PASS]/[FAIL]` por check | 🖥️ **Script** (`qa_check.py`) |
 
-> 💡 **Fase 1 automática (sin LLM):** desde la unificación 2026-09-07, el Agente 1 se ejecuta 100% sin LLM. Los scripts portables (`run_fase1_run3.sh` + `run_target.sh` + `stepN.sh`) recorren `authorized_targets`, ejecutan los 10 steps con delays, deciden estados `success / failed / skipped_*`, implementan retry 1x y generan `manifest.json`.
+> 💡 **Fase 1 automática (sin LLM):** desde la unificación 2026-09-07, el Agente 1 se ejecuta 100% sin LLM. Los scripts portables (`run_fase1_run3.sh` + `run_target.sh` + `stepN.sh`) recorren `authorized_targets`, ejecutan los 12 steps con delays, deciden estados `success / failed / skipped_*`, implementan retry 1x y generan `manifest.json`.
 
 ### Guardrails inquebrantables (R1-R5)
 - **R1 Scope estricto** — nunca se escanea fuera de `config/scope.json`.
@@ -109,6 +109,8 @@ El pipeline soporta **tres entornos** que comparten el mismo set de scripts (`sc
 | **Gobuster · jq** | ya incluidos | `brew install gobuster jq` | `apt install` |
 | **SSLyze** | ya incluido | `pipx install sslyze` | `pipx install sslyze` |
 | **smbclient · ping** | ya incluidos | incluidos en macOS | `apt install smbclient` |
+| **ldapsearch** | incluido en macOS (`/usr/bin`) | incluido en macOS | `apt install ldap-utils` |
+| **enum4linux-ng** | — | ❌ no aplica (Step 12 solo Linux) | `apt install enum4linux-ng` |
 | **HTTPX (probe PD)** | `httpx-toolkit` | `httpx-pd` → `httpx` | `httpx-toolkit` |
 | **WhatWeb** | `apt install whatweb` | `git clone` en `tools/WhatWeb` | `apt install whatweb` |
 | **SecLists** | `/opt/SecLists` | `~/Documents/SecLists` | `/opt/SecLists` |
@@ -180,7 +182,7 @@ bash scripts/host/run_target.sh 10.10.0.10 # Fase 1 para un solo target
 ./run_host.sh                              # verifica entorno e imprime instrucciones
 ```
 
-Cada target ejecuta el DAG de 10 steps con delays de stealth, retry 1x y `skipped_*` automático según servicio detectado. La evidencia queda en `evidence/<target>/` + `manifest.json`. Detalle en [Fase 1](#-fase-1-pipeline-de-recon-10-steps).
+Cada target ejecuta el DAG de 12 steps con delays de stealth, retry 1x y `skipped_*` automático según servicio detectado. La evidencia queda en `evidence/<target>/` + `manifest.json`. Detalle en [Fase 1](#-fase-1-pipeline-de-recon-12-steps).
 
 ### 3) Fase 0 interactiva + Fases 2-5 (con LLM)
 
@@ -208,11 +210,11 @@ El Orchestrator te guiará: **aprobás o modificás** cada comando (Fase 0), y l
 >
 > 📄 `.cline/master_prompt.md` es **local** (`.gitignore`): la versión publicada es la plantilla sanitizada `.cline/master_prompt.md.template`, sin IPs ni paths del analista.
 
-## 🔍 Fase 1: Pipeline de Recon (10 Steps)
+## 🔍 Fase 1: Pipeline de Recon (12 Steps)
 
 > Spec operativa: `specs/agent_recon_pipeline.md` · Implementación: `scripts/host/` (`run_fase1_run3.sh` + `run_target.sh` + `step1..step10`)
 
-Es un **DAG lineal** (`1 → 2 → … → 10`) sobre **9 herramientas**, con **service-based routing**: cada paso decide si corresponde ejecutarse según lo detectado por los pasos anteriores. Nunca hay dos herramientas en paralelo contra el mismo target (R3).
+Es un **DAG lineal** (`1 → 2 → … → 12`) sobre **11 herramientas**, con **service-based routing**: cada paso decide si corresponde ejecutarse según lo detectado por los pasos anteriores. Nunca hay dos herramientas en paralelo contra el mismo target (R3).
 
 | # | Step | Herramienta | Cuándo se ejecuta | Evidencia producida |
 |---|---|---|---|---|
@@ -226,6 +228,8 @@ Es un **DAG lineal** (`1 → 2 → … → 10`) sobre **9 herramientas**, con **
 | 8 | `sslyze` | SSLyze | Solo en los puertos TLS detectados en el Step 3 | `sslyze_<puerto>.json` |
 | 9 | `iis_shortname` | IIS Shortname (8.3) | Web **y** firma `Microsoft-IIS` en `httpx.json` | `iis_shortname_*` |
 | 10 | `smbclient_enum` | smbclient (null session) | Solo si 139/445 están abiertos | `smbclient_*.txt` |
+| 11 | `ldap_enum` | ldapsearch (anónimo; creds opt-in) | Si 389/636/3268/3269 abierto (Linux y macOS) | `ldapsearch.txt` + `ldapsearch_domain.txt` |
+| 12 | `enum4linux` | enum4linux-ng (anónimo/solo lectura) | Solo Linux y solo si 139/445 están abiertos | `enum4linux.txt` + `enum4linux.json` |
 
 **Comportamiento del runner:**
 
@@ -271,15 +275,20 @@ Salida: `plans/<target_id>_exploitation_plan.md`
 
 Consulta **vulnx** (ProjectDiscovery) como fuente única: consolida NVD, Exploit-DB, GitHub advisories, vendor bulletins y CISA KEV en una sola API. Filtra **CVSS ≥ 4.0** y rankea Top 3-5 por servicio con orden estricto (exploit público verificado > impacto crítico > CVSS) y `rank_reason` obligatorio por CVE.
 
+Además fusiona **todas** las fuentes de versión de la evidencia (nmap + whatweb + **nikto + httpx + headers de Gobuster**) y aplica una **advisory watchlist local** (`config/advisories/`) para los CVE críticos que vulnx todavía no indexa (hoy: **PHP2Shell** `CVE-2026-109618` / `CVE-2026-109619`), con comparación determinista de versiones y dos guardas anti falso positivo: nunca lista un CVE sobre su propia versión parcheada (watchlist) y **descarta los CVE cuyo fix declarado ya está aplicado en el host** (`filtered_patched_cves[]`, desactivable con `--no-patched-filter`) — esto último elimina el ruido típico de la búsqueda textual de vulnx (consultar `php 8.2.31` devolvía los CVE arreglados *en* 8.2.31).
+
 ```bash
 python3 scripts/cve_research_vulnx.py \
     --target-id TGT-001 --target-ip 10.10.0.10 \
-    --nmap    evidence/10.10.0.10/nmap_detailed.json \
-    --whatweb evidence/10.10.0.10/whatweb.json \
-    --nuclei  evidence/10.10.0.10/nuclei.json
+    --nmap       evidence/10.10.0.10/nmap_detailed.json \
+    --whatweb    evidence/10.10.0.10/whatweb.json \
+    --nuclei     evidence/10.10.0.10/nuclei.json \
+    --evidence-dir evidence/10.10.0.10 \
+    --cliente-dir  CLIENTE/10.10.0.10/outputs \
+    --advisories config/advisories
 ```
 
-Salida: `cve_research/<target_id>_cves.json` (incluye `source_omissions` cuando una consulta no responde). Requiere el binario `vulnx` en el PATH; con `PDCP_API_KEY` se eliminan los rate-limits. Utilidad auxiliar: `scripts/cves_md.py`.
+Salida: `cve_research/<target_id>_cves.json` (incluye `source_omissions` cuando una consulta no responde, `watchlist_matches[]` y `summary.watchlist_cves`). Requiere el binario `vulnx` en el PATH; con `PDCP_API_KEY` se eliminan los rate-limits. Complemento determinista (offline): **`scripts/php2shell_audit.py`** barre toda la evidencia y clasifica cada target contra el advisory (`plans/php2shell_<fecha>.md`). Utilidad auxiliar: `scripts/cves_md.py`.
 
 ## 📦 Fase 4: Consolidación y Entregables
 
@@ -332,8 +341,8 @@ python3 scripts/make_vuln_report.py --project CLIENTE
 python3 scripts/qa_check.py     # desde la raíz del proyecto (no acepta argumentos)
 ```
 
-- **8 checks** (`CK-01` … `CK-08`) sobre alcance, integridad de outputs, validez de los JSON, consistencia de CVEs, trazabilidad de los planes, consistencia del reporte, ofuscación de secretos y entregables de la Fase 4.
-- **Bloqueantes:** `CK-04` (CVEs), `CK-05` (planes) y `CK-07` (secretos) → si fallan, la entrega se detiene. El resto son informativos o permiten continuar con advertencia.
+- **10 checks** (`CK-01` … `CK-10`) sobre alcance (incluye **`target_id` únicos por target**), integridad de outputs, legibilidad de JSON/JSONL, consistencia de CVEs, trazabilidad de los planes, consistencia del reporte, ofuscación de secretos, entregables de la Fase 4 y **advisory crítico sin reportar** (PHP2Shell).
+- **Bloqueantes:** `CK-01` (scope/ids), `CK-04` (CVEs), `CK-05` (planes), `CK-07` (secretos) y `CK-10` (advisory crítico) → si fallan, la entrega se detiene. El resto son informativos o permiten continuar con advertencia.
 - **Exit code:** `0` (todo PASS) / `1` (al menos un FAIL). Los checks cuyo insumo no existe reportan *"no aplica"* y no fallan.
 
 > 📖 Detalle de cada check, entradas y salidas: [`scripts/qa_check.md`](scripts/qa_check.md). El check `CK-06` valida `reports/final_report.json` **si existe**: ese artefacto es legacy (el generador de reporte final fue retirado con la Fase 3) y su ausencia se considera "no aplica".
@@ -491,6 +500,7 @@ ReconArgentumAI/
 │   ├── scope.json (no versionado)    # ⭐ Alcance autorizado del engagement
 │   ├── scope.json.template           # Plantilla versionada del alcance
 │   ├── stealth.yaml                  # Timeouts/rates/delays (fuente única R5)
+│   ├── advisories/                   # ⭐ Watchlist local de CVEs críticos recientes (PHP2Shell)
 │   └── approved_commands.md          # Comandos aprobados en Fase 0 (no versionado)
 ├── specs/                            # Specs operativas de cada agente
 ├── openspec/
@@ -502,8 +512,9 @@ ReconArgentumAI/
 │   └── WhatWeb/                      # Binario local WhatWeb
 ├── scripts/
 │   ├── README.md                     # Guía de entrada (lenguaje simple)
-│   ├── host/                         # Pipeline Fase 1: steps 1-10, runners, preflight
-│   ├── cve_research_vulnx.py         # ⭐ Agente 4 (CVE Research con vulnx)
+│   ├── host/                         # Pipeline Fase 1: steps 1-12, runners, preflight
+│   ├── cve_research_vulnx.py         # ⭐ Agente 4 (CVE Research con vulnx + watchlist)
+│   ├── php2shell_audit.py            # ⭐ Auditoría offline PHP2Shell (alimenta CK-10)
 │   ├── organize_project.py           # ⭐ Fase 4 — consolidación
 │   ├── make_vuln_report.py           # ⭐ Agente 6 — entregables por target
 │   ├── qa_check.py                   # ⭐ Agente 7 — QA determinista
@@ -517,7 +528,7 @@ ReconArgentumAI/
 ├── logs/                             # Logs de ejecución
 ├── CLIENTE/                          # ⭐ Consolidación por target (gitignored)
 ├── RUNBOOK.md                        # ⭐ Manual operativo del Orchestrator
-├── Dockerfile                        # Kali + 9 herramientas + SecLists
+├── Dockerfile                        # Kali + 11 herramientas + SecLists
 ├── docker-compose.yml
 └── run_docker.sh / run_host.sh       # Lanzadores (Docker / host macOS)
 ```

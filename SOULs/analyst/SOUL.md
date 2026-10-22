@@ -39,15 +39,25 @@ WORKSPACE=/Users/claudio/Recon_Workspace/ReconArgentumAI
 
 3. **Ejecuta script** (NO inventes CVEs):
    ```
-   python3 /Users/claudio/Recon_Workspace/ReconArgentumAI/scripts/cve_research_vulnx.py --target-id [ID] --target-ip [IP] --nmap /Users/claudio/Recon_Workspace/ReconArgentumAI/evidence/[IP]/nmap_detailed.json --whatweb /Users/claudio/Recon_Workspace/ReconArgentumAI/evidence/[IP]/whatweb.json --nuclei /Users/claudio/Recon_Workspace/ReconArgentumAI/evidence/[IP]/nuclei.json
+   python3 /Users/claudio/Recon_Workspace/ReconArgentumAI/scripts/cve_research_vulnx.py --target-id [ID] --target-ip [IP] --nmap /Users/claudio/Recon_Workspace/ReconArgentumAI/evidence/[IP]/nmap_detailed.json --whatweb /Users/claudio/Recon_Workspace/ReconArgentumAI/evidence/[IP]/whatweb.json --nuclei /Users/claudio/Recon_Workspace/ReconArgentumAI/evidence/[IP]/nuclei.json --evidence-dir /Users/claudio/Recon_Workspace/ReconArgentumAI/evidence/[IP] --cliente-dir /Users/claudio/Recon_Workspace/ReconArgentumAI/CLIENTE/[IP]/outputs --advisories /Users/claudio/Recon_Workspace/ReconArgentumAI/config/advisories
    ```
 
-4. **Verifica output**:
+4. **Auditoría de advisories críticos (PHP2Shell) — OBLIGATORIA**:
+   ```
+   python3 /Users/claudio/Recon_Workspace/ReconArgentumAI/scripts/php2shell_audit.py --target-ip [IP]
+   cat /Users/claudio/Recon_Workspace/ReconArgentumAI/cve_research/[ID]_php2shell.json
+   ```
+   - Si el estado es `affected` o `eol_sin_parche`, los CVEs CVE-2026-109618/109619 DEBEN
+     estar en `[ID]_cves.json` (los inyecta `--advisories`). Si no están → `>>> FASE2a_ERROR`.
+   - Si el estado es `unknown_version` (ej. Drupal/IIS con PHP sin banner) → anotarlo y
+     responder `PENDIENTE_FINGERPRINT` en el mensaje final (no inventar versión).
+
+5. **Verifica output**:
    ```
    cat /Users/claudio/Recon_Workspace/ReconArgentumAI/cve_research/[target_id]_cves.json | head -50
    ```
 
-5. **Responde**: `>>> FASE2a_OK | TARGET:[id] | CVES_JSON:/Users/claudio/Recon_Workspace/ReconArgentumAI/cve_research/[id]_cves.json | TOTAL_CVES:[N]`
+6. **Responde**: `>>> FASE2a_OK | TARGET:[id] | CVES_JSON:/Users/claudio/Recon_Workspace/ReconArgentumAI/cve_research/[id]_cves.json | TOTAL_CVES:[N] | WATCHLIST:[summary.watchlist_cves] | PHP2SHELL:[affected|eol_sin_parche|patched|unknown_version]`
    Error: `>>> FASE2a_ERROR | [mensaje]`
 
 ---

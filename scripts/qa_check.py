@@ -3,7 +3,7 @@
 """
 qa_check.py — QA DETERMINISTA para ReconArgentumAI
 ===================================================
-Ejecuta 8 checks mecánicos sobre los artefactos generados por el pipeline.
+Ejecuta 10 checks mecánicos sobre los artefactos generados por el pipeline.
 NO alucina, NO interpreta, NO redacta. Solo verifica con comandos del sistema.
 
 Salida:
@@ -36,10 +36,30 @@ def c(name, ok, detail=""):
 # =====================================================================
 
 def ck01_scope(scope):
+    """CK-01: scope válido (targets + engagement_id) y target_id ÚNICOS.
+
+    Un id repetido entre targets hace que los manifiestos y los informes por target
+    se pisen entre sí (bug real del run de octubre 2026: 4 IPs con id
+    `S-10.10.10.80` y 5 con `S-10.10.10.195`, lo que sobreescribía
+    `cve_research/<id>_cves.json`).
+    """
     targets = scope.get("authorized_targets", [])
     eng_id = scope.get("engagement_id")
-    c("CK-01", len(targets) > 0 and bool(eng_id),
-      f"engagement={eng_id}, targets={len(targets)}")
+    base_ok = len(targets) > 0 and bool(eng_id)
+    ids = [str(t.get("id") or "") for t in targets]
+    sin_id = [t.get("ip") for t in targets if not str(t.get("id") or "").strip()]
+    dups = sorted({i for i in ids if i and ids.count(i) > 1})
+    problemas = []
+    if not base_ok:
+        problemas.append("engagement_id o authorized_targets faltantes")
+    if sin_id:
+        problemas.append("targets sin id: " + ", ".join(str(x) for x in sin_id[:4]))
+    if dups:
+        problemas.append("target_id duplicados: " + ", ".join(dups[:4]))
+    if problemas:
+        c("CK-01", False, "; ".join(problemas))
+    else:
+        c("CK-01", True, f"engagement={eng_id}, targets={len(targets)}, ids únicos")
     return targets
 
 def ck02_outputs(scope):
@@ -67,22 +87,55 @@ def ck02_outputs(scope):
         except Exception as e:
             c("CK-02", False, f"{ip}: {e}")
 
+def _json_file_status(fp):
+    """(ok, kind, err) — acepta JSON, JSONL y archivos vacíos.
+
+    - JSONL: httpx/nuclei de ProjectDiscovery escriben un JSON por línea
+      (`{"timestamp":...}\\n{...}`) → `json.load` falla con "Extra data" y NO es
+      corrupción.
+    - VACÍO: un `nuclei.json` de 0 bytes significa "el step corrió y no encontró
+      nada" (o quedó failed, según el manifest). No es evidencia corrupta.
+    El check caza únicamente JSON ILEGIBLE.
+    """
+    try:
+        with open(fp, encoding="utf-8", errors="replace") as f:
+            txt = f.read()
+    except Exception as e:
+        return False, "unreadable", str(e)
+    if not txt.strip():
+        return True, "empty", ""
+    try:
+        json.loads(txt)
+        return True, "json", ""
+    except Exception as e_full:
+        for line in (ln for ln in txt.splitlines() if ln.strip()):
+            try:
+                json.loads(line)
+            except Exception:
+                return False, "invalid", str(e_full)
+        return True, "jsonl", ""
+
+
 def ck03_json():
     all_files = []
     all_files += glob(os.path.join(WS, "evidence", "*", "*.json"))
     all_files += glob(os.path.join(WS, "cve_research", "*_cves.json"))
+    all_files += glob(os.path.join(WS, "cve_research", "*_php2shell.json"))
     all_files += glob(os.path.join(WS, "reports", "*.json"))
-    bad = []
+    kinds, bad = {"json": 0, "jsonl": 0, "empty": 0}, []
     for fp in all_files:
-        try:
-            json.load(open(fp, encoding="utf-8"))
-        except Exception as e:
-            bad.append((fp, str(e)))
+        ok, kind, err = _json_file_status(fp)
+        if ok:
+            kinds[kind] = kinds.get(kind, 0) + 1
+        else:
+            bad.append((fp, err))
     if bad:
         for fp, err in bad[:5]:
             c("CK-03", False, f"{os.path.relpath(fp, WS)}: {err}")
     else:
-        c("CK-03", True, f"{len(all_files)} JSONs válidos")
+        c("CK-03", True, f"{len(all_files)} archivos OK "
+                         f"({kinds['json']} JSON, {kinds['jsonl']} JSONL, "
+                         f"{kinds['empty']} vacíos)")
 
 def ck04_cves():
     cve_files = glob(os.path.join(WS, "cve_research", "*_cves.json"))
@@ -118,10 +171,19 @@ def ck05_planes(scope):
         return
     for pf in plan_files:
         try:
-            content = open(pf, encoding="utf-8").read()
-            ev_refs = re.findall(r'evidence/[^\s/)\]]+(?:/[^\s/)\]]+)?', content)
+            content = open(pf, encoding="utf-8", errors="replace").read()
+            # La ref suele ir entre backticks (`evidence/<ip>/x.json`) → se descarta la
+            # puntuación de cierre para no generar falsos positivos (bug detectado 2026-10-22
+            # al añadir refs inline en los planes).
+            ev_refs = [r.rstrip("`.,;:)>'\"") for r in
+                       re.findall(r'evidence/[^\s/)\]]+(?:/[^\s/)\]]+)?', content)]
+            ev_refs = [r for r in ev_refs if r]
             if not ev_refs:
-                c("CK-05", False, f"{os.path.basename(pf)}: sin refs a evidence/")
+                # Spec (openspec/specs/qa-validation/spec.md, CK-05): "Plan sin refs
+                # a evidence/ → PASS" (no bloqueante). Se deja constancia en el
+                # detalle para que la falta de trazabilidad quede visible.
+                c("CK-05", True,
+                  f"{os.path.basename(pf)}: sin refs a evidence/ (no bloqueante)")
                 continue
             missing = [r for r in ev_refs if not os.path.exists(os.path.join(WS, r))]
             if missing:
@@ -183,6 +245,124 @@ def ck08_f4():
     else:
         c("CK-08", True, "Sin deliverables F4 (no aplica si no se corrió)")
 
+EXPECTED_STEPS = [(1, "nmap_ports"), (2, "httpx"), (3, "nmap_detailed"), (4, "nuclei"), (5, "nikto"), (6, "whatweb"), (7, "gobuster"), (8, "sslyze"), (9, "iis_shortname"), (10, "smbclient_enum"), (11, "ldap_enum"), (12, "enum4linux")]
+VALID_STATUS = {"success", "failed", "skipped", "skipped_no_ports", "skipped_no_web", "skipped_no_domain", "skipped_no_tftp", "skipped_no_tls", "skipped_no_iis", "skipped_no_smb", "skipped_no_ldap", "skipped_unsupported_os"}
+
+
+def ck09_dag_contract(scope):
+    """CK-09: contrato del DAG (12 steps) - steps, herramientas y estados esperados."""
+    problemas, avisos, vistos = [], [], 0
+    for tg in scope.get("authorized_targets", []):
+        ip = tg.get("ip", "")
+        mpath = os.path.join(WS, "evidence", ip, "manifest.json")
+        if not os.path.exists(mpath):
+            continue
+        vistos += 1
+        try:
+            man = json.load(open(mpath, encoding="utf-8"))
+        except Exception as e:
+            problemas.append("%s: manifest ilegible (%s)" % (ip, e))
+            continue
+        tools = man.get("tools_executed", [])
+        if len(tools) != len(EXPECTED_STEPS):
+            problemas.append("%s: %d steps (se esperan %d)" % (ip, len(tools), len(EXPECTED_STEPS)))
+        por_step = {}
+        for t in tools:
+            try:
+                por_step[int(t.get("step"))] = t
+            except Exception:
+                problemas.append("%s: step invalido (%s)" % (ip, t.get("step")))
+        for st, tool in EXPECTED_STEPS:
+            t = por_step.get(st)
+            if not t:
+                problemas.append("%s: falta el step %d (%s)" % (ip, st, tool))
+                continue
+            if t.get("tool") != tool:
+                problemas.append("%s: step %d = %s (se esperaba %s)" % (ip, st, t.get("tool"), tool))
+            if t.get("status") not in VALID_STATUS:
+                problemas.append("%s: step %d status invalido (%s)" % (ip, st, t.get("status")))
+            if st in (11, 12) and t.get("status") == "success" and not t.get("output"):
+                avisos.append("%s: step %d success con output vacio (evidencia condicional descartada)" % (ip, st))
+    if problemas:
+        c("CK-09", False, "; ".join(problemas[:4]))
+    else:
+        det = ("%d manifest(s) con 12 steps OK" % vistos) if vistos else "Sin manifests para validar"
+        if avisos:
+            det += " | aviso: " + avisos[0]
+        c("CK-09", True, det)
+
+
+def ck10_php2shell():
+    """CK-10: PHP2Shell (CVE-2026-109618/109619) — advisory crítico no reportado.
+
+    Para cada target auditado por `php2shell_audit.py` con estado `affected` o
+    `eol_sin_parche`, exige que los CVEs del advisory estén presentes en
+    `cve_research/<target_id>_cves.json` (que es lo que consumen el Agente 6 y los
+    entregables). Desactivable con QA_PHP2SHELL_BLOCKING=0 (queda como aviso).
+    """
+    audits = glob(os.path.join(WS, "cve_research", "*_php2shell.json"))
+    if not audits:
+        c("CK-10", True, "Sin auditoría PHP2Shell (no aplica)")
+        return
+    blocking = os.environ.get("QA_PHP2SHELL_BLOCKING", "1") != "0"
+    problemas, avisos, ok = [], [], 0
+    for af in audits:
+        try:
+            data = json.load(open(af, encoding="utf-8"))
+        except Exception as e:
+            problemas.append("%s: ilegible (%s)" % (os.path.basename(af), e))
+            continue
+        php = data.get("php") or {}
+        status = php.get("status")
+        tid = data.get("target_id") or data.get("target")
+        advisory_cves = [x.upper() for x in (data.get("advisory_cves") or [])]
+        if status in ("patched", "not_affected_branch"):
+            ok += 1
+            continue
+        if status in ("unknown_version", "no_php_evidence", None):
+            if status == "unknown_version":
+                avisos.append("%s: PHP sin versión (requiere fingerprint activo)" % tid)
+            ok += 1
+            continue
+        if status not in ("affected", "eol_sin_parche"):
+            avisos.append("%s: estado no contemplado (%s)" % (tid, status))
+            ok += 1
+            continue
+        reported = set()
+        # El *_cves.json del Agente 4 se nombra con el id con que se lo invocó (en este
+        # engagement: la IP). El auditor puede traer el id canónico (`S-<ip>`), así que
+        # se prueban las DOS convenciones antes de declarar el CVE como no reportado.
+        cf = os.path.join(WS, "cve_research", "%s_cves.json" % tid)
+        if not os.path.exists(cf):
+            ip_name = data.get("target") or tid
+            cf = os.path.join(WS, "cve_research", "%s_cves.json" % ip_name)
+        if os.path.exists(cf):
+            try:
+                cd = json.load(open(cf, encoding="utf-8"))
+                for group in (cd.get("services_analyzed", []),
+                              cd.get("web_technologies", [])):
+                    for item in group:
+                        for cv in item.get("cves", []):
+                            if cv.get("id"):
+                                reported.add(str(cv["id"]).upper())
+            except Exception as e:
+                problemas.append("%s: %s ilegible (%s)" % (tid, os.path.basename(cf), e))
+                continue
+        faltan = [x for x in advisory_cves if x not in reported]
+        if faltan:
+            msg = ("%s: PHP %s %s sin CVE en cve_research (faltan %s)"
+                   % (tid, php.get("version") or "?", status, ", ".join(faltan)))
+            (problemas if blocking else avisos).append(msg)
+        else:
+            ok += 1
+    if problemas:
+        c("CK-10", False, "; ".join(problemas[:3]))
+    elif avisos:
+        c("CK-10", True, "%d auditorías OK | aviso: %s" % (ok, avisos[0]))
+    else:
+        c("CK-10", True, "%d auditoría(s) PHP2Shell consistentes" % ok)
+
+
 # =====================================================================
 # MAIN
 # =====================================================================
@@ -199,6 +379,11 @@ def main():
     except Exception as e:
         print(f"  {COL_F} FATAL: {scope_path}: {e}")
         sys.exit(1)
+    flt = os.environ.get("SCOPE_FILTER_IP", "").strip()
+    if flt:
+        scope = dict(scope)
+        scope["authorized_targets"] = [t for t in scope.get("authorized_targets", []) if t.get("ip") == flt]
+        print("  (filtro) SCOPE_FILTER_IP=%s -> solo se evaluan los checks POR TARGET de esa IP" % flt)
     targets = ck01_scope(scope)
     if targets:
         ck02_outputs(scope)
@@ -210,6 +395,8 @@ def main():
     ck06_report(scope)
     ck07_secrets()
     ck08_f4()
+    ck09_dag_contract(scope)
+    ck10_php2shell()
     print()
     print("=" * 60)
     total = len(passed) + len(failed)
@@ -218,7 +405,7 @@ def main():
     print()
     if failed:
         print("  ❌  QA FALLIDO — Revisar [FAIL] antes de continuar.")
-        print("      Críticos: CK-04, CK-05, CK-07 (bloquean pipeline).")
+        print("      Críticos: CK-01, CK-04, CK-05, CK-07, CK-10 (bloquean pipeline).")
         sys.exit(1)
     else:
         print("  ✅  QA OK  —  Todos los checks deterministas pasaron.")

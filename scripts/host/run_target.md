@@ -3,7 +3,7 @@
 ## 🧩 ¿Qué es?
 
 Es **el "director de orquesta" del escaneo** para un solo objetivo (una IP). Recibe la IP y
-ejecuta, en orden y respetando tiempos de espera, **los 10 pasos** del pipeline de reconocimiento:
+ejecuta, en orden y respetando tiempos de espera, **los 12 pasos** del pipeline de reconocimiento:
 
 1. **Nmap** — ver qué puertos/servicios están abiertos.
 2. **HTTPX** — cuáles son sitios web.
@@ -19,6 +19,12 @@ ejecuta, en orden y respetando tiempos de espera, **los 10 pasos** del pipeline 
 10. **SMB Enum** (`step10_smbclient_enum.sh`) — lista recursos compartidos SMB vía *null session*,
     **solo si** el TCP 139/445 está abierto (`open_ports.txt` o `nmap_detailed.xml`, service-based
     como Nuclei); si no, queda `skipped_no_smb`.
+11. **LDAP Enum** (`step11_ldap_enum.sh`) - LDAP/AD con `ldapsearch`: root DSE anónimo y, si la Fase 0
+    aprobó credenciales, usuarios y SPN. **Corre en Linux y macOS**; solo si 389/636/3268/3269 está abierto.
+12. **Enum4linux** (`step12_enum4linux_enum.sh`) - enumeración AD anónima (usuarios, grupos,
+    política de contraseñas, dominio) vía sesión nula; **solo Linux**: en macOS queda
+    `skipped_unsupported_os` **sin generar tráfico**, y en Linux **solo si** TCP 139/445 está
+    abierto (si no, `skipped_no_smb`). Evidencia: `enum4linux.txt` + `enum4linux.json`.
 
 Al final genera el **manifest.json**: la "ficha" que registra qué se ejecutó, qué produjo cada
 paso y si hubo errores.

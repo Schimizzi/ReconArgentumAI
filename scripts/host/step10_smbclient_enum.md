@@ -104,7 +104,11 @@ bash scripts/host/step10_smbclient_enum.sh --ev-dir evidence/10.150.40.155 --for
 - Si el objetivo **no tiene** 139/445 abiertos, muestra `skipped_no_smb` y **no genera
   tráfico** hacia él.
 - **Evidencia condicional:** si la corrida no produce login anónimo ni shares accesibles,
-  el `smbclient_shares.txt` no se conserva (se elimina). Así, solo quedan en `outputs/` los
+  el `smbclient_shares.txt` no se conserva (se elimina) y queda únicamente la **nota del rechazo**
+  `smbclient_sin_sesion.txt` (comando + motivo literal, ej. `NT_STATUS_LOGON_FAILURE`).
+  Esa nota la declara el `manifest.json` y el Agente 6 la reporta como hallazgo informativo
+  *"Sesion SMB anonima rechazada (smbclient)"* (antes el rechazo se perdía). Se anuncia en consola
+  con `STEP_SMBCLIENT_NOTE sin_sesion`. Así, en `outputs/` solo quedan los
   targets con hallazgo real (anon) o exposición verificada (shares Disk legibles).
 - En el modo `--all` (solo modo manual), además del detalle por target en consola, queda el
   resumen acumulado en `CLIENTE/smbclient_checks/smbclient_summary.txt` (mismo patrón de

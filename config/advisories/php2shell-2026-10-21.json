@@ -1,0 +1,84 @@
+{
+  "advisory_id": "php2shell-2026-10-21",
+  "title": "PHP2Shell - RCE no autenticado en PHP (CVE-2026-109618 / CVE-2026-109619)",
+  "product": "php",
+  "product_aliases": ["php", "php-fpm", "php-cgi", "mod_php", "frankenphp", "litespeed lsapi"],
+  "implied_by": ["drupal", "wordpress", "joomla", "dokuwiki", "moodle", "nextcloud", "mediawiki", "typo3", "phpmyadmin", "laravel", "symfony"],
+  "published": "2026-10-21",
+  "active": true,
+  "cvss_version": "4.0",
+  "cvss_score": 9.2,
+  "severity": "CRITICAL",
+  "branches": {
+    "8.2": {"patched": "8.2.35"},
+    "8.3": {"patched": "8.3.36"},
+    "8.4": {"patched": "8.4.27"},
+    "8.5": {"patched": "8.5.12"}
+  },
+  "eol_max_exclusive": "8.2.0",
+  "eol_note": "PHP 5.x, 7.x, 8.0 y 8.1 estan EOL: el proyecto PHP NO publica release con el fix. Solo backport de source (7.4/8.0/8.1) o paquete del vendor (RHEL/Ubuntu Pro/Debian LTS/CloudLinux).",
+  "cves": [
+    {
+      "id": "CVE-2026-109618",
+      "cvss_score": 9.2,
+      "severity": "CRITICAL",
+      "impact": "remote_code_execution",
+      "mechanism": "RCE por corrupcion out-of-memory durante el cleanup del request (afecta tambien el path de sesion via session.upload_progress).",
+      "exploit_available": true,
+      "in_the_wild": true,
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2026-109618",
+        "https://github.com/NCSC-NL/php2shell"
+      ]
+    },
+    {
+      "id": "CVE-2026-109619",
+      "cvss_score": 9.2,
+      "severity": "CRITICAL",
+      "impact": "remote_code_execution",
+      "mechanism": "RCE por reuso de estado global 'stale' de un request por el request siguiente en el mismo worker.",
+      "exploit_available": true,
+      "in_the_wild": true,
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2026-109619",
+        "https://php2shell.uk/faq"
+      ]
+    }
+  ],
+  "sapis_afectados": [
+    "Apache mod_php (riesgo MAXIMO: explotable antes de que corra el codigo de la app)",
+    "PHP-FPM (RCE validado por el path de sesion; path OOM vulnerable por analisis)",
+    "php-cgi",
+    "FrankenPHP",
+    "LiteSpeed LSAPI (probable)"
+  ],
+  "precondiciones": [
+    "PHP sirviendo requests web (cualquier app: WordPress, Drupal, DokuWiki, Laravel, codigo propio)",
+    "NO requiere autenticacion, plugin ni endpoint especial",
+    "NO requiere mas que una peticion HTTP (plano)"
+  ],
+  "mitigaciones_temporales": [
+    "session.upload_progress=Off + restart de PHP-FPM/Apache y de todo proceso PHP long-running",
+    "Revisar guia de memory_limit / post_max_size / fatal_error_backtraces (8.5)",
+    "WAF al frente (cobertura parcial: Cloudflare/Akamai/Imperva publicaron reglas)"
+  ],
+  "senales_deteccion": [
+    "fatal error de memoria (memory limit) despues de un request multipart",
+    "rafagas de HTTP 500",
+    "segfaults de workers PHP (dmesg/core)",
+    "PHPSESSID inusualmente largo o percent-encoded"
+  ],
+  "sources": [
+    "CERT-EU Security Advisory 2026-018",
+    "https://github.com/NCSC-NL/php2shell",
+    "https://php2shell.uk/faq",
+    "https://www.wiz.io/blog/php2shell-php-rce",
+    "https://watchtowr.com/intelligence (Rapid Reaction 2026-10-21)"
+  ],
+  "notes": [
+    "Nombre publico: 'PHP2Shell' (script combinado usado por los investigadores).",
+    "El score 10.0 que circulo en algunos sitios corresponde a un leak con CVSS incorrecto; el oficial es 9.2 (CVSS 4.0).",
+    "NVD no indexa el keyword 'php2shell' (consulta 2026-10-22: 0 resultados) -> por eso este advisory es local y obligatorio.",
+    "Verificar backports: distros parchean sin cambiar la version upstream (ej. 8.3.6-0ubuntu0.24.04.x). Comando: rpm -q --changelog php | grep -i CVE-2026-1096"
+  ]
+}
