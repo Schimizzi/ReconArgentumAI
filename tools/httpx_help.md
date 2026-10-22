@@ -4,6 +4,8 @@
 ##   - El pipeline resuelve el binario de probe con **prioridad**: `httpx-toolkit` → `httpx-pd` → `httpx` (los 3 de ProjectDiscovery).
 ##   - **Kali Linux:** el binario PD se llama **`httpx-toolkit`** (Kali renombra los binarios PD que chocan con paquetes Python). Es el PRINCIPAL.
 ##   - **macOS / contenedor Docker:** se usa **`httpx-pd`** (`/Users/claudio/go/bin/httpx-pd`).
+##   - **El binario NO se versiona en el repo** (se removió `tools/httpx-pd` del árbol en 2026-10-22):
+##     se resuelve por `PATH` (`command -v httpx-pd`); instalarlo aparte (apt httpx-toolkit / go install + symlink).
 ##   - El `httpx` del PATH (cliente HTTP de Python, ej. `pip install httpx`) NUNCA sirve para probe: solo se acepta
 ##     como fallback si realmente soporta `-l` (o sea, es el PD real). La resolución prioriza `httpx-toolkit`/`httpx-pd`
 ##     justamente para no caer en él. No confundir.

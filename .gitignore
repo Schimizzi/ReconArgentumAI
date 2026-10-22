@@ -67,6 +67,11 @@
 # Wordlist de SecLists descargada por scripts/host/step7_gobuster.sh en el primer uso.
 /tools/seclists_common.txt
 
+# Binario de probe HTTPX de ProjectDiscovery (`httpx-pd`, ~51 MB): NO se versiona
+# (blob gigante). El pipeline lo resuelve por PATH (`command -v httpx-pd`), nunca
+# por `./tools/httpx-pd`; instalarlo aparte (ver README §Prerrequisitos / tools/httpx_help.md).
+/tools/httpx-pd
+
 # ---------------------------------------------------------------------------
 # 4) SCRIPTS TEMPORALES / DIAGNÓSTICO (no parte del pipeline)
 # ---------------------------------------------------------------------------

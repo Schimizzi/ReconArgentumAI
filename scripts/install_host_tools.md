@@ -44,4 +44,8 @@ proceso en `/tmp/tools_install2.log`.
 - Está pensado para **macOS** (usa Homebrew y pipx).
 - `enum4linux-ng` **no aplica en macOS**: el Step 11 del pipeline solo corre en Linux/Debian (o el contenedor Docker).
 - WhatWeb no tiene instalador automático oficial, por eso se clona en la carpeta `tools/WhatWeb/`.
+- **HTTPX (probe PD):** el repo **no** versiona el binario `httpx-pd` (~51 MB, removido del árbol en
+  2026-10-22). El pipeline lo resuelve por `PATH` (`command -v httpx-pd`); instalarlo aparte
+  (Kali: `sudo apt install httpx-toolkit`; macOS: `go install github.com/projectdiscovery/httpx/cmd/httpx@latest`
+  y crear el symlink `httpx-pd`).
 - Si una herramienta ya está instalada, la detecta y no la reinstala.

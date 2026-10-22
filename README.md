@@ -143,6 +143,8 @@ El pipeline soporta **tres entornos** que comparten el mismo set de scripts (`sc
   ```
 
 > ⚠️ **HTTPX** — el binario de probe (ProjectDiscovery) se resuelve con prioridad: **`httpx-toolkit`** (Kali) → **`httpx-pd`** (macOS) → **`httpx`** (solo si es PD real con flag `-l`). NO confundir con el cliente HTTP de Python (`pip install httpx`), que NO sirve para probe.
+>
+> 📦 **El repo NO versiona el binario** (el antiguo `tools/httpx-pd` de ~51 MB se removió del árbol en 2026-10-22). Se resuelve **por `PATH`** (`command -v httpx-pd`): instalalo aparte — Kali: `sudo apt install httpx-toolkit`; macOS: `go install github.com/projectdiscovery/httpx/cmd/httpx@latest` + symlink como `httpx-pd`.
 
 ---
 
