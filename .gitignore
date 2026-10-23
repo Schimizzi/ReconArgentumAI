@@ -117,3 +117,9 @@ id_rsa.pub
 /Hackademy/
 /presentacion/
 
+# Resultados/evidencia de engagements anteriores (contienen datos de clientes:
+# IPs, capturas de vulnerabilidades). NUNCA versionar.
+/Dreamco_final/
+/Dreamco*/
+/CLIENTE.old/
+
