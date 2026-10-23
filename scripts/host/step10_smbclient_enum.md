@@ -76,7 +76,7 @@ bash scripts/host/step10_smbclient_enum.sh --ev-dir evidence/10.150.40.155 --for
   > acepta **login anónimo** (`Anonymous login successful`) o hay al menos un **share de tipo
   > Disk accesible** (información expuesta). Si no (ej. `session setup failed:
   > NT_STATUS_ACCESS_DENIED`, sin respuesta, etc.), el archivo `smbclient_shares.txt` no se
-  > genera/se elimina: es ruido sin hallazgo y no se entrega al Agente 6.
+  > genera/se elimina: es ruido sin hallazgo y no se entrega.
 - **Resumen de corrida `--all`** (solo modo manual; en `CLIENTE/smbclient_checks/`):
   - `smbclient_summary.txt` — log acumulado por corrida (no se borran corridas previas, igual
     que `iis_shortname_summary.txt`). Por cada target deja: `estado`, `ports`, `shares_disk`,
@@ -84,9 +84,7 @@ bash scripts/host/step10_smbclient_enum.sh --ev-dir evidence/10.150.40.155 --for
     anon_login / no_ping / no_smb / skip_existente` al final de cada corrida.
 
 > Los archivos quedan dentro de la carpeta del target (`outputs/` en modo manual,
-> `evidence/<IP>/` en modo pipeline) a propósito: el **Agente 6** (consolidador de
-> hallazgos) detecta cualquier archivo nuevo en `outputs/` y lo considera automáticamente
-> en la siguiente corrida, sin tocar ningún script.
+> `evidence/<IP>/` en modo pipeline) a propósito, para su revisión manual.
 
 ## ⚠️ Notas
 
@@ -106,7 +104,7 @@ bash scripts/host/step10_smbclient_enum.sh --ev-dir evidence/10.150.40.155 --for
 - **Evidencia condicional:** si la corrida no produce login anónimo ni shares accesibles,
   el `smbclient_shares.txt` no se conserva (se elimina) y queda únicamente la **nota del rechazo**
   `smbclient_sin_sesion.txt` (comando + motivo literal, ej. `NT_STATUS_LOGON_FAILURE`).
-  Esa nota la declara el `manifest.json` y el Agente 6 la reporta como hallazgo informativo
+  Esa nota la declara el `manifest.json`.
   *"Sesion SMB anonima rechazada (smbclient)"* (antes el rechazo se perdía). Se anuncia en consola
   con `STEP_SMBCLIENT_NOTE sin_sesion`. Así, en `outputs/` solo quedan los
   targets con hallazgo real (anon) o exposición verificada (shares Disk legibles).

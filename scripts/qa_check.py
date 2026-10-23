@@ -3,7 +3,7 @@
 """
 qa_check.py — QA DETERMINISTA para ReconArgentumAI
 ===================================================
-Ejecuta 10 checks mecánicos sobre los artefactos generados por el pipeline.
+Ejecuta 9 checks mecánicos sobre los artefactos generados por el pipeline.
 NO alucina, NO interpreta, NO redacta. Solo verifica con comandos del sistema.
 
 Salida:
@@ -237,14 +237,6 @@ def ck07_secrets():
     else:
         c("CK-07", True, f"{len(report_files)} archivos sin secretos")
 
-def ck08_f4():
-    docs = glob(os.path.join(WS, "*", "*", "*_resumen_vulnerabilidades.doc"))
-    txts = glob(os.path.join(WS, "*", "*", "*_resumen_breve.txt"))
-    if docs or txts:
-        c("CK-08", True, f"{len(docs)} .doc, {len(txts)} .txt")
-    else:
-        c("CK-08", True, "Sin deliverables F4 (no aplica si no se corrió)")
-
 EXPECTED_STEPS = [(1, "nmap_ports"), (2, "httpx"), (3, "nmap_detailed"), (4, "nuclei"), (5, "nikto"), (6, "whatweb"), (7, "gobuster"), (8, "sslyze"), (9, "iis_shortname"), (10, "smbclient_enum"), (11, "ldap_enum"), (12, "enum4linux")]
 VALID_STATUS = {"success", "failed", "skipped", "skipped_no_ports", "skipped_no_web", "skipped_no_domain", "skipped_no_tftp", "skipped_no_tls", "skipped_no_iis", "skipped_no_smb", "skipped_no_ldap", "skipped_unsupported_os"}
 
@@ -297,8 +289,8 @@ def ck10_php2shell():
 
     Para cada target auditado por `php2shell_audit.py` con estado `affected` o
     `eol_sin_parche`, exige que los CVEs del advisory estén presentes en
-    `cve_research/<target_id>_cves.json` (que es lo que consumen el Agente 6 y los
-    entregables). Desactivable con QA_PHP2SHELL_BLOCKING=0 (queda como aviso).
+    `cve_research/<target_id>_cves.json` (el artefacto que consume la Fase 5).
+    Desactivable con QA_PHP2SHELL_BLOCKING=0 (queda como aviso).
     """
     audits = glob(os.path.join(WS, "cve_research", "*_php2shell.json"))
     if not audits:
@@ -394,7 +386,6 @@ def main():
     ck05_planes(scope)
     ck06_report(scope)
     ck07_secrets()
-    ck08_f4()
     ck09_dag_contract(scope)
     ck10_php2shell()
     print()

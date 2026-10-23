@@ -19,11 +19,11 @@
 #      - Sin alcanzar: NO genera hallazgos. Solo deja evidencia de la corrida
 #        en CLIENTE/gobuster_checks_RAW.txt y unreachable.txt, y pasa al siguiente.
 #      - Con alcanzar: procesa las URLs y escribe por target:
-#          outputs/gobuster_evidence.txt         hallazgos (lo lee el Agente 6)
+#          outputs/gobuster_evidence.txt         hallazgos
 #          outputs/gobuster_evidence.json        idem en JSON (parser generico)
 #          outputs/gobuster_commands_outputs.txt EVIDENCIA HUMANA: cada comando
 #                                              curl con su salida completa
-#                                              (NO lo consume el Agente 6).
+#                                              (no se consume en el pipeline).
 #
 # Stealth: timeout/UA navegador, --http1.1, sin seguir redirects, sin payload.
 # No ejecuta exploits. Severidades ORIENTATIVAS; decision del analista.
@@ -151,8 +151,7 @@ mask_credentials(){
     -e 's/(AKIA|ASIA)[0-9A-Z]{10,}/***/g'
 }
 # add_finding SEVERIDAD CHECK TITULO URL MSG [PORT]  -> escribe las salidas
-# La severidad NO se escribe en gobuster_evidence.* (evidencia que consume el
-# Agente 6): el script solo marca el tipo de hallazgo; la gravedad la decide el
+# La severidad NO se escribe en gobuster_evidence.* : el script solo marca el tipo de hallazgo; la gravedad la decide el
 # analista/reporter. Solo el RAW de corrida conserva la etiqueta orientativa.
 add_finding(){
   local sev="$1" chk="$2" titulo="$3" u="$4" msg="$5"
@@ -160,7 +159,7 @@ add_finding(){
   [ -n "$port_e" ] || port_e="null"
   msg="$(printf '%s' "$msg" | mask_credentials)"
   titulo="$(printf '%s' "$titulo" | mask_credentials)"
-  # evidencia para el Agente 6: sin severidad (CHECK<TAB>URL<TAB>DETALLE)
+  # evidencia sin severidad (CHECK<TAB>URL<TAB>DETALLE)
   printf '%s\t%s\t%s\n' "$chk" "$u" "$msg" >> "$FIND_TXT"
   {
     printf '{"title":%s,"description":%s,"url":%s,"check":%s,"port":%s,"source":"gobuster_checks"}\n' \
@@ -753,7 +752,7 @@ run_one_target(){
   {
     echo "# gobuster_commands_outputs — $ip ($(date '+%Y-%m-%d %H:%M:%S'))"
     echo "# Guarda CADA comando curl ejecutado y su salida completa."
-    echo "# Es EVIDENCIA PARA AUDITORÍA HUMANA; NO lo consume el Agente 6."
+    echo "# Es EVIDENCIA PARA AUDITORÍA HUMANA; no se consume en el pipeline."
   } >> "$CMD_FILE"
 
   # 7- procesar cada URL

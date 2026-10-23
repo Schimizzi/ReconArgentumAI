@@ -279,7 +279,7 @@ if ! grep -qiE "Unable to connect|NT_STATUS_LOGON_FAILURE|Connection refused" "$
 fi
 echo "STEP_ENUM4LINUX_DONE $TARGET bin=$BIN ports=${SMB_PORTS} workgroup=${WK:-auto} rid=$RID"
 if [ "$CALIFICA" -eq 1 ]; then
-  echo "Evidencia: $OUT_TXT (+ enum4linux.json/.yaml) → detectada por el Agente 6 en la próxima corrida."
+  echo "Evidencia: $OUT_TXT (+ enum4linux.json/.yaml) → disponible para revisión manual."
 else
   # D (2026-10-22): igual que el Step 10 — se descarta la evidencia cruda (ruido sin
   # hallazgo) pero se conserva la NOTA del rechazo para que el reporte lo documente.

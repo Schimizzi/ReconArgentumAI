@@ -71,8 +71,8 @@ enum4linux-ng -As -R 200 -w <WORKGROUP> -t {{enum4linux_timeout_seconds}} <IP>
 - **Evidencia** en `evidence/<target>/` (pipeline) o `CLIENTE/<IP>/outputs/` (manual):
   `enum4linux.txt` (primera línea = comando ejecutado) + `enum4linux.json`/`enum4linux.yaml`.
   **Solo se conserva** si hubo sesión establecida y al menos una sección con datos; si no, se elimina.
-- El Agente 6 (`scripts/make_vuln_report.py`) tiene un parser `parse_enum4linux()` dedicado; si se
-  agregan archivos nuevos, el fallback genérico los detecta igual.
+- Estos archivos quedan en `evidence/<target>/` y `organize_project.py` los copia a
+  `CLIENTE/<IP>/outputs/` para su revisión manual.
 - **Riesgo de detección ALTO** en AD auditado (binds anónimos LDAP/SMB y `lookupsids`): usar solo en
   ventanas autorizadas.
 - Reflejo de los comandos aprobados en Fase 0: este step solo usa el modo pasivo anónimo salvo que el

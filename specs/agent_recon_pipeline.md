@@ -1,7 +1,7 @@
 # Spec operativa — Recon Pipeline (Fase 1)
 
 > Instrucción operativa que el **Orchestrator** lee ANTES de ejecutar la Fase 1.
-> Complementa: `openspec/changes/add-pentest-recon-pipeline/specs/recon-pipeline/spec.md` (contrato formal),
+> Complementa: `openspec/specs/recon-pipeline/spec.md` (contrato formal),
 > `SOULs/orchestrator/SOUL.md` (rol y guardrails R1-R5) y `config/approved_commands.md` (única fuente de comandos).
 > `<WORKSPACE>` = raíz del proyecto. Todos los paths son relativos a `<WORKSPACE>` (ver `SOULs/orchestrator/SOUL.md` §Constantes).
 
@@ -295,7 +295,7 @@ python3 scripts/host/step9_iis_shortname_scan.py --ev-dir <WORKSPACE>/evidence/<
 
 - La firma IIS se toma del campo `webserver` de `httpx.json` (`Microsoft-IIS/8.5`, `Microsoft-IIS/10.0`,
   etc.); servers como `gSOAP/2.8`, `Apache-Coyote/1.1` o `nginx` **no** disparan el Step 9.
-- Evidencia en `evidence/<target>/`: `iis_shortname_evidence.txt`/`.json` (consumido por el Agente 6),
+- Evidencia en `evidence/<target>/`: `iis_shortname_evidence.txt`/`.json`,
   `iis_scan_urls.txt` y `iis_shortname_commands_outputs.txt`.
 - `--force` no es necesario aquí (el script conserva evidencia previa salvo que sea SIN_CONEXION total;
   en el pipeline las corridas son frescas sobre el ev-dir del target).

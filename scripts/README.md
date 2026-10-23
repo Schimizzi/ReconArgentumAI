@@ -34,13 +34,15 @@ Cada `.md` que acompaña a un script explica, sin código:
 | `check_gobuster_urls.sh` | Revisa las URLs descubiertas buscando pistas de vulnerabilidades (headers, listados, credenciales, métodos peligrosos…) | [▶ check_gobuster_urls.md](check_gobuster_urls.md) |
 | `gobuster_urls.sh` | Arma la lista única de URLs a partir de los resultados de Gobuster | [▶ gobuster_urls.md](gobuster_urls.md) |
 | `install_host_tools.sh` | Instala las herramientas de pentest en la Mac (una sola vez) | [▶ install_host_tools.md](install_host_tools.md) |
+| `install_souls.sh` | Instala los 4 perfiles (SOUL) de Hermes Agent en `~/.hermes/profiles/` (uso manual) | [▶ install_souls.md](install_souls.md) |
 | `xml_to_nmap_json.py` | Convierte el XML de Nmap a JSON | [▶ xml_to_nmap_json.md](xml_to_nmap_json.md) |
 | `cves_md.py` | Convierte la investigación CVE a un documento legible | [▶ cves_md.md](cves_md.md) |
 | `cve_research_vulnx.py` | Investiga CVEs de cada servicio/tecnología con `vulnx` + watchlist local de advisories (Agente 4, Fase 2) | [▶ cve_research_vulnx.md](cve_research_vulnx.md) |
 | `php2shell_audit.py` | Auditoría **offline** de PHP2Shell (CVE-2026-109618/109619) sobre toda la evidencia: versión, SAPI, afectados (alimenta el check CK-10) | [▶ php2shell_audit.md](php2shell_audit.md) |
 | `resumen_exploit.py` | Pre-filtra la evidencia por target y arma un resumen compacto para el Agente 3 (Fase 2) | [▶ resumen_exploit.md](resumen_exploit.md) |
+| `gen_exploitation_draft.py` | Genera el **borrador** del plan de explotación (Agente 3, Fase 2b) desde la evidencia — rotulado, sin ejecutar nada (uso manual, no entra al DAG) | [▶ gen_exploitation_draft.md](gen_exploitation_draft.md) |
+| `audit_exploitation_plans.py` | Contrasta los planes contra la evidencia: puertos inventados/omitidos, CVEs sin respaldo y PoC promovidas (control de fiabilidad, solo lectura) | [▶ audit_exploitation_plans.md](audit_exploitation_plans.md) |
 | `organize_project.py` | Ordena y consolida toda la evidencia en la carpeta del cliente | [▶ organize_project.md](organize_project.md) |
-| `make_vuln_report.py` | Genera los informes de vulnerabilidades (Agente 6) — acumula corridas con horario | [▶ make_vuln_report.md](make_vuln_report.md) |
 | `hydra_audit.sh` | Auditoría **manual** de credenciales débiles con Hydra (por target o `--all`) — fuera del pipeline, con límite de intentos y log central | [▶ hydra_audit.md](hydra_audit.md) |
 | `cleanup_engagement.sh` | Borra toda la evidencia del cliente y deja el repo listo para el próximo | [▶ cleanup_engagement.md](cleanup_engagement.md) |
 

@@ -70,3 +70,27 @@ Si el usuario indica presencia de WAF o tarpits durante la Fase 0, el Orchestrat
 #### Scenario: Usuario reporta tarpits
 - **WHEN** el usuario indica en la Fase 0 que hay tarpits o WAF con retardo inducido
 - **THEN** el sistema sugiere valores de timeout aumentados (15-20s) y rate-limit reducido, y los aplica en `config/stealth.yaml` antes de proponer comandos
+
+### Requirement: Orden de la Fase 2 — CVE Research antes del Plan de Explotación
+
+La Fase 2 (Análisis) SHALL ejecutarse en dos subfases ordenadas por target: primero la **Fase 2a — Agente 4 (CVE Research)**, que produce `cve_research/<target_id>_cves.json`; y luego la **Fase 2b — Agente 3 (Plan de Explotación)**, que produce `plans/<target_id>_exploitation_plan.md`. El Agente 3 SHALL consumir `cve_research/<target_id>_cves.json` como insumo cuando exista. Si ese archivo no pudo generarse (por ejemplo, `vulnx` no está disponible en PATH), el Agente 3 SHALL ejecutarse igualmente y marcar los CVEs no verificados como no confirmados o `insufficient_data`, sin inventar CVEs ni versiones.
+
+#### Scenario: Target sin CVE research previo
+
+- **WHEN** se inicia la Fase 2 de un target y `cve_research/<target_id>_cves.json` todavía no existe
+- **THEN** el sistema ejecuta primero el Agente 4 (Fase 2a) y recién después el Agente 3 (Fase 2b)
+
+#### Scenario: Plan correlacionado con CVEs
+
+- **WHEN** el Agente 3 genera `plans/<target_id>_exploitation_plan.md` y existe `cve_research/<target_id>_cves.json`
+- **THEN** el plan correlaciona los CVEs del Agente 4 con su CVSS y disponibilidad de exploit, referenciando el JSON como fuente
+
+#### Scenario: CVE research no disponible (fallback no bloqueante)
+
+- **WHEN** `cve_research/<target_id>_cves.json` no está disponible (ej. `vulnx` ausente) y el Agente 3 debe generar el plan
+- **THEN** el Agente 3 se ejecuta igual y marca los CVEs no verificados como no confirmados o `insufficient_data`, sin inventar CVEs
+
+#### Scenario: Re-ejecución idempotente del plan
+
+- **WHEN** se re-ejecuta el Agente 3 sobre un target que ya tiene `cve_research/<target_id>_cves.json`
+- **THEN** el plan se regenera consumiendo ese JSON existente, sin requerir re-ejecutar el Agente 4

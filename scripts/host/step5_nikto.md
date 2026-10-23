@@ -45,4 +45,4 @@ bash scripts/host/step5_nikto.sh 10.155.10.15 http://10.155.10.15:8082 8082
 - Solo web: no se ejecuta si no hay endpoints web confirmados.
 - No revisa la web si la dirección no responde (evita colgarse).
 - Nikto es más intrusivo que otras herramientas del pipeline (genera más tráfico).
-- Los resultados JSON son consumidos luego por el Agente 6 (consolidador de hallazgos).
+- Los resultados JSON son quedan para su revisión manual.

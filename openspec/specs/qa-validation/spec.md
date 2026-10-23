@@ -111,14 +111,6 @@ El QA SHALL aplicar regex sobre `reports/*.json` y `reports/*.md` para detectar 
 - **WHEN** ningún valor está en claro
 - **THEN** `[PASS] CK-07`
 
-### Requirement: CK-08 — Existencia de deliverables F4
-
-El QA SHALL buscar archivos `*_resumen_vulnerabilidades.doc` y `*_resumen_breve.txt` en subdirectorios de nivel 2 del workspace. Si existen, PASS; si no, PASS con nota.
-
-#### Scenario: Entregables existen
-- **WHEN** se encuentran archivos de resumen
-- **THEN** `[PASS] CK-08` con conteo
-
 ### Requirement: CK-09 — Contrato del DAG de recon (12 steps)
 
 El QA SHALL (por cada `manifest.json` de un target autorizado) verificar que `tools_executed`
@@ -142,7 +134,7 @@ condicional descartada), no como fallo del contrato.
 El QA SHALL, para cada `cve_research/<target_id>_php2shell.json` con `php.status` en
 `{affected, eol_sin_parche}`, verificar que **todos** los CVEs del advisory (`advisory_cves[]`, hoy
 `CVE-2026-109618` y `CVE-2026-109619`) aparezcan en `cve_research/<target_id>_cves.json` (el
-artefacto que consumen el Agente 6 y los entregables). Si falta alguno ⇒ `[FAIL] CK-10`
+artefacto que consume la Fase 5). Si falta alguno ⇒ `[FAIL] CK-10`
 **BLOQUEANTE**. Los estados `patched` y `no_php_evidence` SHALL pasar; `unknown_version` SHALL pasar
 dejando un aviso de que el target requiere fingerprint activo. El check SHALL poder degradarse a
 aviso con `QA_PHP2SHELL_BLOCKING=0`.

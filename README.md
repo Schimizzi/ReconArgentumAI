@@ -2,7 +2,7 @@
 
 > **AI-driven Pentesting** — Pipeline automatizado, multi-agente y guiado por IA para el reconocimiento y análisis de infraestructura autorizada.
 
-ReconArgentumAI es una **plataforma de pentesting de infraestructura** que orquesta un pipeline de *recon* de **12 pasos sobre 11 herramientas** de seguridad, dirigido por un **modelo de IA** (agnóstico del proveedor) a través de Cline / Roo Code o Hermes Agent. El sistema **no explota nada**: produce evidencia completa en disco, planes de explotación documentados y **entregables por target** (`_resumen_vulnerabilidades.doc` + `_resumen_breve.txt`), siguiendo guardrails de scope, stealth y ofuscación inquebrantables.
+ReconArgentumAI es una **plataforma de pentesting de infraestructura** que orquesta un pipeline de *recon* de **12 pasos sobre 11 herramientas** de seguridad, dirigido por un **modelo de IA** (agnóstico del proveedor) a través de Cline / Roo Code o Hermes Agent. El sistema **no explota nada**: produce evidencia completa en disco y planes de explotación documentados, siguiendo guardrails de scope, stealth y ofuscación inquebrantables.
 
 Pensado para **red teams, auditores y equipos de seguridad ofensiva** que quieren *recon* reproducible, trazable y de bajo ruido, tanto contra **Internet** como contra la **LAN local** — desde una misma herramienta. Opcionalmente, la **Fase 1 (Recon)** puede ejecutarse **sin LLM** de forma totalmente automática (<code>--auto</code>), delegando la orquestación a scripts portables que deciden estados <code>success / failed / skipped_*</code>, retry 1x y delays desde configuración.
 
@@ -39,8 +39,8 @@ Las cinco fases y sus agentes se detallan en [Arquitectura Multi-Agente](#-arqui
 | 🔒 **Ofuscación automática de credenciales** | Cualquier *password, token, API key o credencial* descubierta se redacta como `***` en los reportes. La evidencia original no se toca. |
 | 🕶️ **Sigilo dinámico (stealth)** | Delay entre herramientas (30 s) y entre targets (5 min), rate-limits y timeouts parametrizados desde `config/stealth.yaml`. **Nada hardcodeado**. Adaptación ante WAF/tarpits (sube timeouts, baja rates). |
 | 🎯 **Ranking inteligente de CVEs** | Top 3-5 CVEs por servicio con orden estricto: **exploit público verificado > impacto crítico (RCE/auth-bypass/SQLi) > CVSS**. Cada CVE con `rank_reason` documentado. |
-| ✅ **QA determinista antes de entregar** | 8 comprobaciones mecánicas **sin LLM** (`scripts/qa_check.py`) validan integridad, consistencia, trazabilidad y ofuscación. Si falla un check crítico, la entrega se bloquea. |
-| 📦 **Entregables consolidados por target** | `organize_project.py` ordena la evidencia en `CLIENTE/<target>/` y `make_vuln_report.py` (Agente 6) genera los resúmenes `.doc` + `.txt`, todos con paths absolutos de trazabilidad. |
+| ✅ **QA determinista antes de entregar** | 9 checks deterministas **sin LLM** (`scripts/qa_check.py`, CK-01…CK-10) validan integridad, consistencia, trazabilidad y ofuscación. Si falla un check crítico, la entrega se bloquea. |
+| 📦 **Consolidación por target** | `organize_project.py` ordena toda la evidencia en `CLIENTE/<target>/{data,outputs}/` + `README.md`, con paths de trazabilidad. |
 
 ## 🧩 Arquitectura Multi-Agente
 
@@ -49,22 +49,21 @@ El pipeline se ejecuta en **5 fases**, orchestradas por un **Orchestrator lógic
 ```
 Fase 0  Calibración interactiva
 Fase 1  Recon secuencial (DAG 12 steps, 11 herramientas)
-Fase 2  Análisis (Agente 3: plan de explotación + Agente 4: CVE research)
-Fase 4  Consolidación (organize_project.py + Agente 6: resúmenes doc/txt por target)
-Fase 5  QA Final (Agente 7: 8 checks deterministas, validación pre-entrega)
+Fase 2  Análisis (2a: Agente 4 CVE research → 2b: Agente 3 plan de explotación)
+Fase 4  Consolidación (organize_project.py)
+Fase 5  QA Final (Agente 7: 9 checks deterministas, validación pre-entrega)
 ```
 
-> 📌 **Sobre la numeración (Fase 3 / Agente 5):** la numeración conserva los IDs históricos del proyecto. **No existe una Fase 3** ni un Agente 5: la antigua fase de reporter (`make_report.py`) fue retirada del pipeline y su rol lo cubren hoy el **Agente 6** (entregables `.doc`/`.txt` por target) y la **Fase 5** (QA determinista). El Agente 2 fue absorbido por el propio Recon. Los IDs vigentes son **1** (Recon), **3** (Exploitation Planner), **4** (CVE Researcher), **6** (Consolidador de Hallazgos) y **7** (QA Final), más el **Orchestrator** de la Fase 0 — **6 agentes** en total.
+> 📌 **Sobre la numeración (Fases 3 / Agentes 5 y 6):** la numeración conserva los IDs históricos del proyecto. **No existen la Fase 3 ni los Agentes 5 y 6**: la antigua fase de reporter (`make_report.py`) y el consolidador de hallazgos (`make_vuln_report.py`) fueron retirados del pipeline. El Agente 2 fue absorbido por el propio Recon. Los IDs vigentes son **1** (Recon), **3** (Exploitation Planner), **4** (CVE Researcher) y **7** (QA Final), más el **Orchestrator** de la Fase 0 — **5 agentes** en total.
 
 | Fase | Agente | Rol | Salida clave | Modo de ejecución |
 |---|---|---|---|---|
 | **0** | 🎛️ **Orchestrator** | Calibra las herramientas con el usuario (contexto de defensas, puertos, wordlists) y registra solo comandos aprobados. | `config/approved_commands.md` | 🤖 **LLM / Manual** |
 | **1** | 🔍 **Agente 1 — Recon Agent** | Ejecuta el DAG lineal de 12 steps (Nmap → HTTPX → Nmap -sC -sV → Nuclei → Nikto → WhatWeb → Gobuster → SSLyze → IIS Shortname → SMB Enum → LDAP Enum → Enum4linux) con delays stealth, service-based routing y retry 1x. | `evidence/<target>/` + `manifest.json` | 🤖 **LLM / Automático sin LLM** (`--auto`) |
-| **2** | 🧠 **Agente 3 — Exploitation Planner** | Correlaciona evidencia por servicio con **protección de contexto** y redacta vectores accionables. **Nunca ejecuta exploits.** | `plans/<target_id>_exploitation_plan.md` | 🧠 **Solo LLM** |
-| **2** | 🔬 **Agente 4 — CVE Researcher** | Consulta **vulnx** (ProjectDiscovery, fuente única: NVD + Exploit-DB + advisories + CISA KEV), filtra CVSS ≥ 4.0 y rankea Top 3-5 por servicio con `rank_reason`. | `cve_research/<target_id>_cves.json` | 🧠 **Solo LLM** |
+| **2a** | 🔬 **Agente 4 — CVE Researcher** | Consulta **vulnx** (ProjectDiscovery, fuente única: NVD + Exploit-DB + advisories + CISA KEV), filtra CVSS ≥ 4.0 y rankea Top 3-5 por servicio con `rank_reason`. **Corre PRIMERO** (su salida alimenta al Agente 3). | `cve_research/<target_id>_cves.json` | 🧠 **Solo LLM** |
+| **2b** | 🧠 **Agente 3 — Exploitation Planner** | Correlaciona evidencia por servicio con **protección de contexto** y redacta vectores accionables, consumiendo `cve_research/<id>_cves.json`. **Nunca ejecuta exploits.** | `plans/<target_id>_exploitation_plan.md` | 🧠 **Solo LLM** |
 | **4** | 📦 **Consolidador físico** | `organize_project.py` copia evidencia a `CLIENTE/<target>/{data,outputs}/` + genera README del proyecto. | `CLIENTE/<target>/{data,outputs}/` + `CLIENTE/README.md` | 🖥️ **Script** |
-| **4** | 📝 **Agente 6 — Consolidador de Hallazgos** | Lee solo `CLIENTE/<target>/outputs/`, extrae hallazgos con **cero invención** y genera 2 entregables por target. | `_resumen_vulnerabilidades.doc` + `_resumen_breve.txt` | 🖥️ **Script** (`make_vuln_report.py`) |
-| **5** | ✅ **Agente 7 — QA Final** | Ejecuta 10 checks deterministas (integridad, consistencia, trazabilidad, ofuscación, advisory crítico sin reportar) sobre todos los artefactos. **No usa LLM.** | Salida `[PASS]/[FAIL]` por check | 🖥️ **Script** (`qa_check.py`) |
+| **5** | ✅ **Agente 7 — QA Final** | Ejecuta 9 checks deterministas (integridad, consistencia, trazabilidad, ofuscación, advisory crítico sin reportar) sobre todos los artefactos. **No usa LLM.** | Salida `[PASS]/[FAIL]` por check | 🖥️ **Script** (`qa_check.py`) |
 
 > 💡 **Fase 1 automática (sin LLM):** desde la unificación 2026-09-07, el Agente 1 se ejecuta 100% sin LLM. Los scripts portables (`run_fase1_run3.sh` + `run_target.sh` + `stepN.sh`) recorren `authorized_targets`, ejecutan los 12 steps con delays, deciden estados `success / failed / skipped_*`, implementan retry 1x y generan `manifest.json`.
 
@@ -143,6 +142,8 @@ El pipeline soporta **tres entornos** que comparten el mismo set de scripts (`sc
   ```
 
 > ⚠️ **HTTPX** — el binario de probe (ProjectDiscovery) se resuelve con prioridad: **`httpx-toolkit`** (Kali) → **`httpx-pd`** (macOS) → **`httpx`** (solo si es PD real con flag `-l`). NO confundir con el cliente HTTP de Python (`pip install httpx`), que NO sirve para probe.
+>
+> 📦 **El repo NO versiona el binario** (el antiguo `tools/httpx-pd` de ~51 MB se removió del árbol en 2026-10-22). Se resuelve **por `PATH`** (`command -v httpx-pd`): instalalo aparte — Kali: `sudo apt install httpx-toolkit`; macOS: `go install github.com/projectdiscovery/httpx/cmd/httpx@latest` + symlink como `httpx-pd`.
 
 ---
 
@@ -196,9 +197,9 @@ Leé el archivo .cline/master_prompt.md y asumí el rol de Orchestrator
 de este pipeline de pentest. Iniciá la Fase 0 (calibración interactiva)
 de las herramientas según el scope definido en config/scope.json. Cuando tengas los
 comandos aprobados, ejecutá la Fase 1 contra los targets del alcance y
-continuá con la Fase 2 (Agente 3: plan de explotación + Agente 4: CVE
-research), la Fase 4 (consolidación en CLIENTE/ + Agente 6: resúmenes por
-target) y la Fase 5 (QA determinista). Respetá SIEMPRE los
+continuá con la Fase 2 (2a: Agente 4 CVE research → 2b: Agente 3 plan de
+explotación), la Fase 4 (consolidación en CLIENTE/) y la Fase 5 (QA determinista).
+Respetá SIEMPRE los
 guardrails R1-R5.
 ```
 
@@ -267,6 +268,10 @@ Correlaciona servicios, versiones y vulnerabilidades detectadas y produce un **p
 
 Salida: `plans/<target_id>_exploitation_plan.md`
 
+El plan es **accionable**: por cada vector declara su **estado de aplicabilidad** (`confirmado` / `probable` / `no confirmado`, con qué falta para confirmarlo), la **PoC concreta con su fuente** (Exploit-DB ID, repo GitHub, módulo Metasploit o comando equivalente — o *"Sin PoC pública verificada en la evidencia"*), los **comandos exactos**, la **evidencia a capturar con su criterio de confirmación** (y cómo refutarla) y el **mapeo MITRE ATT&CK**; cierra con una **matriz de aplicabilidad y evidencia**. Disciplina: no se agrega PoC cuando `exploit_available` es `false` ni a CVEs de matcher amplio (versión/producto sin confirmar), y **nunca** se inventan PoC.
+
+> 🔧 **Borrador determinista (opcional):** para lotes grandes existe `scripts/gen_exploitation_draft.py`, que emite el **esqueleto** del plan desde la evidencia y lo deja **rotulado como borrador** para que el Agente 3 lo revise (`--all` no pisa planes revisados; `--check` es dry-run). **No entra al DAG** y no ejecuta nada contra el target. Ver `scripts/gen_exploitation_draft.md`.
+
 ### Agente 4 — CVE Research
 
 > Spec: `specs/agent_4_cve_research.md` · Script: `scripts/cve_research_vulnx.py` · Guía: [`scripts/cve_research_vulnx.md`](scripts/cve_research_vulnx.md)
@@ -288,9 +293,9 @@ python3 scripts/cve_research_vulnx.py \
 
 Salida: `cve_research/<target_id>_cves.json` (incluye `source_omissions` cuando una consulta no responde, `watchlist_matches[]` y `summary.watchlist_cves`). Requiere el binario `vulnx` en el PATH; con `PDCP_API_KEY` se eliminan los rate-limits. Complemento determinista (offline): **`scripts/php2shell_audit.py`** barre toda la evidencia y clasifica cada target contra el advisory (`plans/php2shell_<fecha>.md`). Utilidad auxiliar: `scripts/cves_md.py`.
 
-## 📦 Fase 4: Consolidación y Entregables
+## 📦 Fase 4: Consolidación
 
-### 1) `organize_project.py` — Consolidar evidencia
+### `organize_project.py` — Consolidar evidencia
 
 ```bash
 python3 scripts/organize_project.py                       # todos los targets
@@ -303,32 +308,6 @@ Estructura: `CLIENTE/<target_ip>/{data/ (planes+reportes), outputs/ (evidencia)}
 
 Opciones: `--project`, `--target`, `--scope`, `--dry-run`, `--no-clobber`.
 
-### 2) `make_vuln_report.py` — Agente 6 (Consolidador de Hallazgos)
-
-> Spec: `specs/agent_6_consolidador_hallazgos.md` · Guía: [`scripts/make_vuln_report.md`](scripts/make_vuln_report.md)
-
-Lee solo `outputs/` de cada target consolidado. **Cero invención:**
-
-```bash
-python3 scripts/make_vuln_report.py --project CLIENTE
-```
-
-| Archivo | Contenido |
-|---|---|
-| `<target_id>_resumen_vulnerabilidades.doc` | Word/LibreOffice (HTML): VULN-00X, título, severidad, fuente, tabla resumen |
-| `<target_id>_resumen_breve.txt` | 1 línea/hallazgo: `VULN-00X | título (Severidad) | fuente → ubicación` |
-
-Opciones: `--project`, `--target`, `--dry-run`, `--no-clobber`, `--reset`.
-
-Reglas: solo lo explícito en fuentes, severidad solo si declarada, deduplicación, ofuscación `***`, detección dinámica, acumulación de corridas.
-
-Flujo completo:
-
-```bash
-python3 scripts/organize_project.py
-python3 scripts/make_vuln_report.py --project CLIENTE
-```
-
 ---
 
 ## ✅ Fase 5: QA Final (Validación Determinista)
@@ -339,7 +318,7 @@ python3 scripts/make_vuln_report.py --project CLIENTE
 python3 scripts/qa_check.py     # desde la raíz del proyecto (no acepta argumentos)
 ```
 
-- **10 checks** (`CK-01` … `CK-10`) sobre alcance (incluye **`target_id` únicos por target**), integridad de outputs, legibilidad de JSON/JSONL, consistencia de CVEs, trazabilidad de los planes, consistencia del reporte, ofuscación de secretos, entregables de la Fase 4 y **advisory crítico sin reportar** (PHP2Shell).
+- **9 checks** (`CK-01` … `CK-10`, sin CK-08) sobre alcance (incluye **`target_id` únicos por target**), integridad de outputs, legibilidad de JSON/JSONL, consistencia de CVEs, trazabilidad de los planes, consistencia del reporte, ofuscación de secretos y **advisory crítico sin reportar** (PHP2Shell).
 - **Bloqueantes:** `CK-01` (scope/ids), `CK-04` (CVEs), `CK-05` (planes), `CK-07` (secretos) y `CK-10` (advisory crítico) → si fallan, la entrega se detiene. El resto son informativos o permiten continuar con advertencia.
 - **Exit code:** `0` (todo PASS) / `1` (al menos un FAIL). Los checks cuyo insumo no existe reportan *"no aplica"* y no fallan.
 
@@ -503,7 +482,7 @@ ReconArgentumAI/
 ├── specs/                            # Specs operativas de cada agente
 ├── openspec/
 │   ├── config.yaml                   # Config OpenSpec
-│   ├── specs/                        # 7 capacidades (specs formales sincronizadas)
+│   ├── specs/                        # 6 capacidades (specs formales sincronizadas)
 │   └── changes/                      # Changes activos + archive/
 ├── tools/
 │   ├── *_help.md                     # Help files verificados (9)
@@ -514,7 +493,6 @@ ReconArgentumAI/
 │   ├── cve_research_vulnx.py         # ⭐ Agente 4 (CVE Research con vulnx + watchlist)
 │   ├── php2shell_audit.py            # ⭐ Auditoría offline PHP2Shell (alimenta CK-10)
 │   ├── organize_project.py           # ⭐ Fase 4 — consolidación
-│   ├── make_vuln_report.py           # ⭐ Agente 6 — entregables por target
 │   ├── qa_check.py                   # ⭐ Agente 7 — QA determinista
 │   ├── install_souls.sh              # Instala los 4 perfiles Hermes
 │   ├── hydra_audit.sh · cleanup_engagement.sh · install_host_tools.sh

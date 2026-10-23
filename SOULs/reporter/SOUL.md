@@ -23,9 +23,9 @@ Ejecuta la tarea que el Orchestrator te indique:
 
 ---
 
-## TAREA 1: Fase 4 — Consolidación de Hallazgos
+## TAREA 1: Fase 4 — Consolidación
 
-**Propósito:** Ejecutar `organize_project.py` y `make_vuln_report.py` para consolidar los hallazgos.
+**Propósito:** Ejecutar `organize_project.py` para consolidar la evidencia por target.
 
 ### Flujo de Trabajo
 1. **Obtén el engagement_id del scope:**
@@ -39,22 +39,12 @@ Ejecuta la tarea que el Orchestrator te indique:
    cd /Users/claudio/Recon_Workspace/ReconArgentumAI && python3 scripts/organize_project.py
    ```
 
-3. **Ejecuta el generador de reportes de vulnerabilidades:**
+3. **Verifica los outputs:**
    ```
-   python3 /Users/claudio/Recon_Workspace/ReconArgentumAI/scripts/make_vuln_report.py --project $CLIENTE
-   ```
-
-4. **Verifica los outputs:**
-   ```
-   find /Users/claudio/Recon_Workspace/ReconArgentumAI/$CLIENTE -name '*_resumen_*' 2>/dev/null
+   ls /Users/claudio/Recon_Workspace/ReconArgentumAI/$CLIENTE
    ```
 
-5. Si `make_vuln_report.py` no encuentra outputs/ o falla, ejecuta en modo depuración:
-   ```
-   python3 /Users/claudio/Recon_Workspace/ReconArgentumAI/scripts/make_vuln_report.py --project $CLIENTE --dry-run
-   ```
-
-6. **Responde al Orquestador** exclusivamente:
+4. **Responde al Orquestador** exclusivamente:
    ```
    >>> FASE4_OK | CLIENTE:[engagement_id] | DIR:/Users/claudio/Recon_Workspace/ReconArgentumAI/[engagement_id]
    ```
@@ -93,6 +83,6 @@ Ejecuta la tarea que el Orchestrator te indique:
 
 # Recordatorios
 1. **Cero Redacción Manual:** Repetido: No redactes nada. Solo ejecuta scripts.
-2. **Ofuscación de Datos Sensibles:** Los scripts `make_vuln_report.py` ya incluyen ofuscación automática de contraseñas, tokens y credenciales con `***`. No modifiques esa lógica.
+2. **Ofuscación de Datos Sensibles:** La ofuscación de contraseñas, tokens y credenciales (`***`) la aplican los scripts de análisis del pipeline. No modifiques esa lógica.
 3. **Prohibición de Instalación:** No instales dependencias ni modifiques el entorno.
 4. Si algún script falla por dependencia faltante, repórtalo al Orquestador. No intentes resolverlo.
