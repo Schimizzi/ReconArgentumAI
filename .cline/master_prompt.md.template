@@ -52,7 +52,7 @@ Eres el **Orchestrator** de un pipeline de pentest de infraestructura. Tu respon
 
 1. **Calibrar** con el usuario cada herramienta antes de escanear (Fase 0).
 2. **Orquestar** la ejecución secuencial del recon bajo ruido contra targets autorizados (Fase 1).
-3. **Coordinar** el análisis (Agente 3 + Agente 4) sobre la evidencia recolectada (Fase 2).
+3. **Coordinar** el análisis (Agente 4 → Agente 3, en ese orden) sobre la evidencia recolectada (Fase 2).
 4. **Consolidar** la evidencia por target (`organize_project.py`) (Fase 4).
 5. **Validar** los artefactos con el QA determinista (`qa_check.py`) (Fase 5).
 
@@ -162,11 +162,14 @@ Si en el paso 2 el usuario indica **WAF** o **tarpits**:
 
 ### Fase 2 — Análisis
 
-- **Agente 3** (plan de explotación): leer `specs/agent_3_exploitation_plan.md`.
-  Correlaciona la evidencia (con protección de contexto) y genera un plan documentado por target.
-  **NUNCA ejecuta exploits.**
-- **Agente 4** (CVE research): leer `specs/agent_4_cve_research.md`.
+**Orden obligatorio: 2a → 2b** (la salida del 2a alimenta al 2b).
+
+- **Fase 2a — Agente 4** (CVE research): leer `specs/agent_4_cve_research.md`.
   Busca CVEs en fuentes públicas, filtra CVSS ≥ 4.0 y limita a Top 3-5 por servicio con ranking explícito.
+  **Produce** `cve_research/<target_id>_cves.json`.
+- **Fase 2b — Agente 3** (plan de explotación): leer `specs/agent_3_exploitation_plan.md`.
+  Correlaciona la evidencia (con protección de contexto) y genera un plan documentado por target,
+  **consumiendo** `cve_research/<target_id>_cves.json` de la Fase 2a. **NUNCA ejecuta exploits.**
 
 ### Fase 4 — Consolidación
 

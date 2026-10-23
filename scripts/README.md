@@ -40,6 +40,8 @@ Cada `.md` que acompaña a un script explica, sin código:
 | `cve_research_vulnx.py` | Investiga CVEs de cada servicio/tecnología con `vulnx` + watchlist local de advisories (Agente 4, Fase 2) | [▶ cve_research_vulnx.md](cve_research_vulnx.md) |
 | `php2shell_audit.py` | Auditoría **offline** de PHP2Shell (CVE-2026-109618/109619) sobre toda la evidencia: versión, SAPI, afectados (alimenta el check CK-10) | [▶ php2shell_audit.md](php2shell_audit.md) |
 | `resumen_exploit.py` | Pre-filtra la evidencia por target y arma un resumen compacto para el Agente 3 (Fase 2) | [▶ resumen_exploit.md](resumen_exploit.md) |
+| `gen_exploitation_draft.py` | Genera el **borrador** del plan de explotación (Agente 3, Fase 2b) desde la evidencia — rotulado, sin ejecutar nada (uso manual, no entra al DAG) | [▶ gen_exploitation_draft.md](gen_exploitation_draft.md) |
+| `audit_exploitation_plans.py` | Contrasta los planes contra la evidencia: puertos inventados/omitidos, CVEs sin respaldo y PoC promovidas (control de fiabilidad, solo lectura) | [▶ audit_exploitation_plans.md](audit_exploitation_plans.md) |
 | `organize_project.py` | Ordena y consolida toda la evidencia en la carpeta del cliente | [▶ organize_project.md](organize_project.md) |
 | `hydra_audit.sh` | Auditoría **manual** de credenciales débiles con Hydra (por target o `--all`) — fuera del pipeline, con límite de intentos y log central | [▶ hydra_audit.md](hydra_audit.md) |
 | `cleanup_engagement.sh` | Borra toda la evidencia del cliente y deja el repo listo para el próximo | [▶ cleanup_engagement.md](cleanup_engagement.md) |

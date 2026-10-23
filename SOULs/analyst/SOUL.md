@@ -67,6 +67,10 @@ WORKSPACE=/Users/claudio/Recon_Workspace/ReconArgentumAI
 WORKSPACE=/Users/claudio/Recon_Workspace/ReconArgentumAI
 PLAN_OUT=/Users/claudio/Recon_Workspace/ReconArgentumAI/plans/[target_id]_exploitation_plan.md
 
+> **Base opcional:** si existe `plans/[target_id]_exploitation_plan.draft.md` (o un plan rotulado como
+> *"Borrador v2 generado automaticamente"*), usalo como **base** y completá/enriquecé los campos con la
+> evidencia. Un plan rotulado como borrador **no es entregable** hasta que vos lo revises.
+
 ### Paso 1 — Mide y decide filtrado (protección de contexto)
 ```
 wc -l /Users/claudio/Recon_Workspace/ReconArgentumAI/evidence/[IP]/nuclei.json

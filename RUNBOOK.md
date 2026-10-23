@@ -244,6 +244,20 @@ REGLAS: 1) PROHIBIDO inventar CVEs/versiones. 2) Lee archivos FÍSICOS con cat/j
 
 **CRITERIO DE ÉXITO:** `wc -l $WS/plans/[target_id]_exploitation_plan.md > 0` (archivo existe con contenido).
 **CRITERIO DE BLOQUEO:** Si el plan no se genera tras 1 reintento → CONTINUAR sin plan. El reporte final lo indicará.
+
+#### Paso previo OPCIONAL (recomendado en lotes grandes)
+
+Para muchos targets, se puede generar primero un **borrador determinista** del plan y después pedirle al
+Agente 3 que lo **revise/enriquezca** (menos contexto y menos varianza):
+
+```
+python3 $WS/scripts/gen_exploitation_draft.py --all            # borradores rotulados (no pisa revisados)
+python3 $WS/scripts/gen_exploitation_draft.py --check --all    # dry-run: qué sería confirmable (no escribe)
+```
+
+- **No es obligatorio**: si no se corre, la Fase 2b funciona igual.
+- El borrador queda **rotulado** en su cabecera → **no es entregable** hasta la revisión del Agente 3.
+- El generador **no ejecuta** nada contra el target (R2) ni escribe en `evidence/` (R4).
 ---
 
 ## §4 FASE 4 — CONSOLIDACIÓN DE HALLAZGOS

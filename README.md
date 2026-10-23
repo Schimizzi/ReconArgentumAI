@@ -49,7 +49,7 @@ El pipeline se ejecuta en **5 fases**, orchestradas por un **Orchestrator lógic
 ```
 Fase 0  Calibración interactiva
 Fase 1  Recon secuencial (DAG 12 steps, 11 herramientas)
-Fase 2  Análisis (Agente 3: plan de explotación + Agente 4: CVE research)
+Fase 2  Análisis (2a: Agente 4 CVE research → 2b: Agente 3 plan de explotación)
 Fase 4  Consolidación (organize_project.py)
 Fase 5  QA Final (Agente 7: 9 checks deterministas, validación pre-entrega)
 ```
@@ -60,8 +60,8 @@ Fase 5  QA Final (Agente 7: 9 checks deterministas, validación pre-entrega)
 |---|---|---|---|---|
 | **0** | 🎛️ **Orchestrator** | Calibra las herramientas con el usuario (contexto de defensas, puertos, wordlists) y registra solo comandos aprobados. | `config/approved_commands.md` | 🤖 **LLM / Manual** |
 | **1** | 🔍 **Agente 1 — Recon Agent** | Ejecuta el DAG lineal de 12 steps (Nmap → HTTPX → Nmap -sC -sV → Nuclei → Nikto → WhatWeb → Gobuster → SSLyze → IIS Shortname → SMB Enum → LDAP Enum → Enum4linux) con delays stealth, service-based routing y retry 1x. | `evidence/<target>/` + `manifest.json` | 🤖 **LLM / Automático sin LLM** (`--auto`) |
-| **2** | 🧠 **Agente 3 — Exploitation Planner** | Correlaciona evidencia por servicio con **protección de contexto** y redacta vectores accionables. **Nunca ejecuta exploits.** | `plans/<target_id>_exploitation_plan.md` | 🧠 **Solo LLM** |
-| **2** | 🔬 **Agente 4 — CVE Researcher** | Consulta **vulnx** (ProjectDiscovery, fuente única: NVD + Exploit-DB + advisories + CISA KEV), filtra CVSS ≥ 4.0 y rankea Top 3-5 por servicio con `rank_reason`. | `cve_research/<target_id>_cves.json` | 🧠 **Solo LLM** |
+| **2a** | 🔬 **Agente 4 — CVE Researcher** | Consulta **vulnx** (ProjectDiscovery, fuente única: NVD + Exploit-DB + advisories + CISA KEV), filtra CVSS ≥ 4.0 y rankea Top 3-5 por servicio con `rank_reason`. **Corre PRIMERO** (su salida alimenta al Agente 3). | `cve_research/<target_id>_cves.json` | 🧠 **Solo LLM** |
+| **2b** | 🧠 **Agente 3 — Exploitation Planner** | Correlaciona evidencia por servicio con **protección de contexto** y redacta vectores accionables, consumiendo `cve_research/<id>_cves.json`. **Nunca ejecuta exploits.** | `plans/<target_id>_exploitation_plan.md` | 🧠 **Solo LLM** |
 | **4** | 📦 **Consolidador físico** | `organize_project.py` copia evidencia a `CLIENTE/<target>/{data,outputs}/` + genera README del proyecto. | `CLIENTE/<target>/{data,outputs}/` + `CLIENTE/README.md` | 🖥️ **Script** |
 | **5** | ✅ **Agente 7 — QA Final** | Ejecuta 9 checks deterministas (integridad, consistencia, trazabilidad, ofuscación, advisory crítico sin reportar) sobre todos los artefactos. **No usa LLM.** | Salida `[PASS]/[FAIL]` por check | 🖥️ **Script** (`qa_check.py`) |
 
@@ -197,8 +197,8 @@ Leé el archivo .cline/master_prompt.md y asumí el rol de Orchestrator
 de este pipeline de pentest. Iniciá la Fase 0 (calibración interactiva)
 de las herramientas según el scope definido en config/scope.json. Cuando tengas los
 comandos aprobados, ejecutá la Fase 1 contra los targets del alcance y
-continuá con la Fase 2 (Agente 3: plan de explotación + Agente 4: CVE
-research), la Fase 4 (consolidación en CLIENTE/) y la Fase 5 (QA determinista).
+continuá con la Fase 2 (2a: Agente 4 CVE research → 2b: Agente 3 plan de
+explotación), la Fase 4 (consolidación en CLIENTE/) y la Fase 5 (QA determinista).
 Respetá SIEMPRE los
 guardrails R1-R5.
 ```
@@ -269,6 +269,8 @@ Correlaciona servicios, versiones y vulnerabilidades detectadas y produce un **p
 Salida: `plans/<target_id>_exploitation_plan.md`
 
 El plan es **accionable**: por cada vector declara su **estado de aplicabilidad** (`confirmado` / `probable` / `no confirmado`, con qué falta para confirmarlo), la **PoC concreta con su fuente** (Exploit-DB ID, repo GitHub, módulo Metasploit o comando equivalente — o *"Sin PoC pública verificada en la evidencia"*), los **comandos exactos**, la **evidencia a capturar con su criterio de confirmación** (y cómo refutarla) y el **mapeo MITRE ATT&CK**; cierra con una **matriz de aplicabilidad y evidencia**. Disciplina: no se agrega PoC cuando `exploit_available` es `false` ni a CVEs de matcher amplio (versión/producto sin confirmar), y **nunca** se inventan PoC.
+
+> 🔧 **Borrador determinista (opcional):** para lotes grandes existe `scripts/gen_exploitation_draft.py`, que emite el **esqueleto** del plan desde la evidencia y lo deja **rotulado como borrador** para que el Agente 3 lo revise (`--all` no pisa planes revisados; `--check` es dry-run). **No entra al DAG** y no ejecuta nada contra el target. Ver `scripts/gen_exploitation_draft.md`.
 
 ### Agente 4 — CVE Research
 
