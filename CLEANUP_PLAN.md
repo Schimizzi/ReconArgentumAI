@@ -3,7 +3,9 @@
 > **Rama:** `chore/cleanup-audit` · **Fecha:** 2026-10-22.
 > **Invariantes por lote:** un lote = un commit atómico `chore(cleanup): <lote>` · después de CADA lote
 > `python3 scripts/qa_check.py` debe dar **107/107 PASS** (línea base que luego pasó a **102/102** al retirar CK-08 — ver §Cambio posterior) · backup previo (git o `plans/.backup_cleanup_2026-10-22/`) ·
-> sin `push`, sin `reset --hard`, sin reescribir historia · si el QA baja o algo se rompe → `git revert` del commit
+> sin `push`, sin `reset --hard`, sin reescribir historia *(excepción 2026-10-23: se autorizó una reescritura con
+> `git filter-repo` + `force-push` para quitar del historial las referencias a la identidad de un cliente en un
+> repositorio público; ver la nota de privacidad en este mismo plan)* · si el QA baja o algo se rompe → `git revert` del commit
 > y re-clasificar el ítem como DUDA.
 
 ---
