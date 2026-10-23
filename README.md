@@ -268,6 +268,8 @@ Correlaciona servicios, versiones y vulnerabilidades detectadas y produce un **p
 
 Salida: `plans/<target_id>_exploitation_plan.md`
 
+El plan es **accionable**: por cada vector declara su **estado de aplicabilidad** (`confirmado` / `probable` / `no confirmado`, con qué falta para confirmarlo), la **PoC concreta con su fuente** (Exploit-DB ID, repo GitHub, módulo Metasploit o comando equivalente — o *"Sin PoC pública verificada en la evidencia"*), los **comandos exactos**, la **evidencia a capturar con su criterio de confirmación** (y cómo refutarla) y el **mapeo MITRE ATT&CK**; cierra con una **matriz de aplicabilidad y evidencia**. Disciplina: no se agrega PoC cuando `exploit_available` es `false` ni a CVEs de matcher amplio (versión/producto sin confirmar), y **nunca** se inventan PoC.
+
 ### Agente 4 — CVE Research
 
 > Spec: `specs/agent_4_cve_research.md` · Script: `scripts/cve_research_vulnx.py` · Guía: [`scripts/cve_research_vulnx.md`](scripts/cve_research_vulnx.md)

@@ -123,16 +123,35 @@ Usa el siguiente comando para escribir el archivo (NO devuelvas el plan solo por
 cat > /Users/claudio/Recon_Workspace/ReconArgentumAI/plans/[target_id]_exploitation_plan.md << 'PLAN_EOF'
 # Plan de Explotación — [target_id] ([target_ip])
 Fecha: [YYYY-MM-DD]
-Riesgo Global: [CRÍTICO/ALTO/MEDIO/BAJO]
+Riesgo Global: [CRÍTICO/ALTO/MEDIO/BAJO] (justificación en 1 línea)
 
 ## Resumen Ejecutivo [basado ESTRICTAMENTE en evidencia]
-## Hallazgos por Servicio | Puerto | Servicio | Versión | Vulns | CVEs | Config |
-## Vectores de Ataque: pre-condiciones | pasos exactos | referencias | riesgo detección
+## Hallazgos por Servicio
+| Puerto | Servicio | Producto/versión | Web | Confirmado | PoC disponible |
+## Vectores accionables
+### V-N — <título>
+- **Aplicabilidad:** confirmado | probable | no confirmado — [qué falta para confirmarlo]
+- **Pre-condiciones:** ...
+- **PoC (fuente: <cve_research/[id]_cves.json | advisory | evidencia>):** [EDB ID | repo GitHub | módulo MSF | comando]
+  (si no existe: "Sin PoC pública verificada en la evidencia")
+- **Comandos exactos:** ```bash ... ``` → resultado esperado
+- **Evidencia a capturar:** [artefacto] → `<EVID>/exploit/V-N_<tool>.txt` · Criterio: [cómo se confirma] · Anti-FP: [cómo se refuta]
+  (`<EVID>` = carpeta de evidencia del target. Usar SIEMPRE el placeholder `<EVID>/`, nunca la ruta concreta `evidence/<IP>/…` de un archivo que todavía no existe: CK-05 valida que toda ref `evidence/...` citada exista.)
+- **MITRE ATT&CK:** T#### 
+- **Referencias:** NVD / Exploit-DB / vendor
+- **Riesgo de detección / Rollback / Impacto**
 ## Vectores No-Web [SMB, MySQL, SSH...]
+## Matriz de aplicabilidad y evidencia
+| Vector | Servicio | Aplicabilidad | PoC (fuente) | Evidencia | Criterio | MITRE |
 ## insufficient_data [si aplica, sin especular]
 ## Referencias a evidencia y CVEs
 PLAN_EOF
 ```
+
+**Reglas del plan (NO negociables):**
+- **NO** agregar PoC si `exploit_available` es `false` o si el CVE es de matcher amplio (versión/producto no confirmado).
+- **NO inventar** comandos, módulos MSF, IDs de Exploit-DB ni repos (solo lo que esté en `cve_research/[id]_cves.json`, `config/advisories/` o la evidencia).
+- **R2:** el plan se documenta, NO se ejecuta.
 
 Luego verifica: `wc -l /Users/claudio/Recon_Workspace/ReconArgentumAI/plans/[target_id]_exploitation_plan.md`
 

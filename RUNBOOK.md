@@ -224,8 +224,14 @@ REGLAS: 1) PROHIBIDO inventar CVEs/versiones. 2) Lee archivos FÍSICOS con cat/j
 10. Genera plan en \$OUT:
     # Plan Explotación [id] ([IP])
     Fecha + Riesgo Global + Resumen Ejecutivo (solo evidencia)
-    Tabla: Puerto | Servicio | Versión | Vulns | CVEs | Config
-    Vectores Ataque: pre-condiciones, pasos, referencias, riesgo detección
+    Tabla: Puerto | Servicio | Producto/versión | Web | Confirmado | PoC disponible
+    Por cada vector V-N: Aplicabilidad (confirmado|probable|no confirmado + qué falta para confirmarlo) |
+      Pre-condiciones | PoC concreta CON FUENTE (EDB ID / repo GitHub / módulo MSF) o "Sin PoC pública
+      verificada en la evidencia" | Comandos exactos (bloque de código) | Evidencia a capturar + criterio
+      de confirmación + anti-FP | MITRE ATT&CK | Referencias | Riesgo detección | Rollback | Impacto
+    Matriz de aplicabilidad y evidencia (tabla)
+    REGLAS: NO PoC si exploit_available=false ni en matcher amplio (versión no confirmada);
+            NO inventar comandos, módulos MSF, IDs de Exploit-DB ni repos.
     Vectores No-Web (SMB, MySQL, SSH...)
     insufficient_data (si aplica)
     Referencias a evidencia y CVEs
